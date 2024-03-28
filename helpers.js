@@ -1,57 +1,105 @@
-var Position = require('./messages/Position')
+const { open } = require('node:fs/promises')
+const turf = require('@turf/turf')
+
+const Position = require('./messages/Position')
 
 module.exports = {}
 
+const PI = Math.PI;
+const toRadians = function (degrees) {
+  return degrees * PI / 180;
+};
+const toDegrees = function (radians) {
+  return radians * 180 / PI;
+};
+
 module.exports.fixRadialDistance = function fixRadialDistance(position, bearing, distance) {
-  const { latitude, longitude } = position
-  // Vincenty's formulae constants
-  const a = 6378137; // 赤道半徑 (m)
-  const f = 1 / 298.257223563; // 扁率
-  const pi = Math.PI;
+  const _pos = turf.destination(
+    turf.point([position.longitude, position.latitude]),
+    distance,
+    bearing,
+    { units: 'meters' }
+  ).geometry.coordinates
+  return new Position(_pos[1], _pos[0])
+}
 
-  // 將角度轉換為弧度
-  const toRadians = function (degrees) {
-    return degrees * pi / 180;
+module.exports.getBearingDistance = function getBearingDistance(position1, position2) {
+  const bearing = turf.bearing(
+    turf.point([position1.longitude, position1.latitude]),
+    turf.point([position2.longitude, position2.latitude])
+  )
+  const distance = turf.distance(
+    turf.point([position1.longitude, position1.latitude]),
+    turf.point([position2.longitude, position2.latitude]),
+    { units: 'meters' }
+  )
+
+  return {
+    distance, // meters
+    bearing
   };
+}
 
-  // 將弧度轉換為角度
-  const toDegrees = function (radians) {
-    return radians * 180 / pi;
-  };
+module.exports.readEarthFix = async function readEarthFix() {
+  const file = await open('earth_fix.dat')
+  const fixes = []
+  for await (const line of file.readLines()) {
+    if (line[0] !== ' ') continue
 
-  // 計算目標點的緯度與經度
-  const calculateDestinationPoint = function (lat1, lon1, initialBearing, distance) {
-    const φ1 = toRadians(lat1);
-    const λ1 = toRadians(lon1);
-    const α1 = toRadians(initialBearing);
-    const s = distance;
+    const [latitude, longitude, ident, type, region] = line.trim().replace(/  +/g, ' ').split(' ')
+    if (region !== 'RC') continue
 
-    const sinφ1 = Math.sin(φ1);
-    const cosφ1 = Math.cos(φ1);
-    const tanφ1 = Math.tan(φ1);
+    fixes.push({
+      position: new Position(parseFloat(latitude), parseFloat(longitude)),
+      ident,
+      type,
+      region
+    })
+  }
+  return fixes
+}
 
-    const α = Math.atan2(Math.sin(α1) * Math.sin(s / a) * cosφ1,
-      Math.cos(s / a) - sinφ1 * sinφ1);
+module.exports.readEarthNav = async function readEarthNav() {
+  const file = await open('earth_nav.dat')
+  const navs = []
+  for await (const line of file.readLines()) {
+    if (line[0] !== ' ') continue
 
-    const δ = Math.atan2(sinφ1 * Math.sin(s / a) * Math.cos(α1),
-      Math.cos(s / a) - sinφ1 * Math.cos(α1));
+    const [, latitude, longitude, , , , , ident, type, region, name] = line.trim().replace(/  +/g, ' ').split(' ')
+    if (region !== 'RC') continue
 
-    const x = δ * Math.sin(α);
-    const y = Math.log(Math.tan(pi / 4 + φ1 / 2) * Math.pow((1 - f * sinφ1) / (1 + f * sinφ1), f / 2));
+    navs.push({
+      position: new Position(parseFloat(latitude), parseFloat(longitude)),
+      ident,
+      type,
+      region,
+      name
+    })
+  }
+  return navs
+}
 
-    const sinφ2 = sinφ1 * Math.cos(s / a) + cosφ1 * Math.sin(s / a) * Math.cos(α1);
-    const φ2 = Math.atan2(sinφ2, Math.sqrt(1 - sinφ2 * sinφ2));
+module.exports.readProcedures = async function readEarthNav(airport, fixes) {
+  const file = await open(`CIFP/${airport}.dat`)
+  const procedures = {}
+  for await (const line of file.readLines()) {
+    if (line === '') continue
 
-    const λ = λ1 + Math.atan2(Math.sin(s / a) * Math.sin(α1),
-      Math.cos(s / a) - sinφ1 * Math.cos(α1));
+    const [typeNSeq, , ident, runway, navaid] = line.trim().replace(/ /g, '').split(',')
+    const [type, seq] = typeNSeq.split(':')
 
-    const destinationLatitude = toDegrees(φ2);
-    const destinationLongitude = toDegrees(λ);
+    if (type === 'RWY') continue
 
-    return new Position(destinationLatitude, destinationLongitude)
-  };
-
-  const destinationPoint = calculateDestinationPoint(latitude, longitude, bearing, distance);
-
-  return destinationPoint;
+    procedures[ident] = procedures[ident] || {}
+    const procedure = procedures[ident]
+    procedure.ident = ident
+    procedure.type = type
+    procedure.runway = runway
+    // TODO: sort by seq
+    procedure.navaids = procedure.navaids || []
+    const fix = fixes.find((fix) => fix.ident === navaid)
+    if (fix === undefined) continue
+    procedure.navaids.push(fix)
+  }
+  return procedures
 }
