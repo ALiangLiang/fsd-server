@@ -10,7 +10,9 @@ You need to copy your nav data from x-plane folder first.
 - Custom Data/earth_fix.dat
 
 ```sh
-node fsd-server.js
+pipenv shell
+pipenv install
+python fsd-server.js
 ```
 
 ### Connect the server
