@@ -1,128 +1,169 @@
 import asyncio
-import socket
-import time
-from geopy.distance import Distance
+import threading
+
+import db.init
+from aircrafts.b738 import B738
+from messages.ATCPositionUpdateMessage import ATCPositionUpdateMessage
+from messages.AddATCMessage import AddATCMessage
 from messages.Position import Position
-from messages.Time import Time
-from messages.FlightplanMessage import FlightplanMessage
-from messages.PilotPositionUpdateMessage import PilotPositionUpdateMessage
-from helpers import read_earth_fix, read_earth_nav, read_procedures, get_bearing_distance, fix_radial_distance
-
-MY_CALLSIGN = 'XE_WL_OBS'
-AC_CALLSIGN = 'CAL123'
-SQUAWK_CODE = '4601'
-GROUND_SPEED = 523  # km/h
-ALTITUDE = 40571  # feet
-PBH_TUPLE = [0, 0, 0, False]  # pitch, bank, heading, on ground
-PRESSURE_DELTA = -1573
-REMARK = 'PBN/A1B1C1D1L1O1S2 DOF/240327 REG/N891SB EET/RJJJ0030 RKRR0043 OPR/SIA PER/D RMK/TCAS SIMBRIEF'
-ROUTE = 'CHAL1C CHALI T3 MKG W6 TNN TNN1J'
-DEPARTURE_AIRPORT = 'RCTP'
-ARRIVAL_AIRPORT = 'RCKH'
+from utils.flightplan import Flightplan
+from utils.physics import Speed
+from helpers import (
+    get_start_leg,
+    get_sid_legs,
+    get_star_legs,
+    get_app_legs,
+    get_fix_by_ident,
+)
 
 
-async def send(socket, msg):
-    print('Send msg to client:', msg)
-    socket.send((msg + '\r\n').encode())
+def set_interval(func, sec):
+    def func_wrapper():
+        set_interval(func, sec)
+        func()
+    t = threading.Timer(sec, func_wrapper)
+    t.start()
+    return t
 
 
-async def send_flight_plan(socket):
-    message = FlightplanMessage(
-        AC_CALLSIGN,
-        MY_CALLSIGN,
-        'I',
-        'S',
-        '1/B738/H-SDE1E2E3FGHIJ2J3J4J5M1RWXY/LB1D1',
-        'N0489',
-        DEPARTURE_AIRPORT,
-        Time(13, 35),
-        Time(13, 35),
-        'F390',
-        ARRIVAL_AIRPORT,
-        1,
-        55,
-        3,
-        30,
-        'RCMQ',
-        REMARK,
-        ROUTE
-    )
-    try:
-        await send(socket, str(message))
-    except Exception as err:
-        print(err)
-        # TODO: send Error Message
+class Client(asyncio.Protocol):
+    def __init__(self):
+        self.transport = None
+        self.callsign: str | None = None
+        self.is_send_flightplan = False
+
+    def send(self, msg: str):
+        print('Send msg to client:', msg)
+        try:
+            self.transport.write((msg + '\r\n').encode())
+        except Exception as err:
+            print(err)
+
+    def connection_made(self, transport):
+        peername = transport.get_extra_info('peername')
+        print('Connection from {}'.format(peername))
+        self.transport = transport
+
+        actived_clients[peername] = self
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        actived_clients.pop(
+            self.transport.get_extra_info('peername')
+        )
+
+    def data_received(self, data):
+        raw_message = data.decode()
+        print('Data received:', raw_message)
+
+        major_command = raw_message[0]
+        if major_command == '#':
+            minor_command = raw_message[1:2]
+            if minor_command == 'AT':
+                print('Received ATISMessage')
+            elif minor_command == 'AA':
+                print('Received AddATCMessage')
+                message = AddATCMessage.parse_raw_message(raw_message)
+                self.callsign = message.source
+                print('callsign', self.callsign)
+        elif major_command == '%':
+            print('Received ATCPositionUpdateMessage')
+            message = ATCPositionUpdateMessage.parse_raw_message(
+                raw_message)
+            self.callsign = message.callsign
+            print('callsign', self.callsign)
 
 
-def flatten_list(irregular_list):
-    return [element for item in irregular_list for element in flatten_list(item)] if type(irregular_list) is list else [irregular_list]
+actived_clients: dict[str, Client] = {}
 
 
 async def main():
-    fixes = await read_earth_fix()
-    navs = await read_earth_nav()
-    dep_procedures = await read_procedures(DEPARTURE_AIRPORT, fixes)
-    arr_procedures = await read_procedures(ARRIVAL_AIRPORT, fixes)
-    LEGS = flatten_list(
-        [fixes.get(leg) or
-         navs.get(leg) or
-         dep_procedures.get(leg, {}).get('navaids') or
-         arr_procedures.get(leg, {}).get('navaids') for leg in ROUTE.split(' ')],
-    )
-    LEGS = [i for i in LEGS if i is not None]
-    print('LEGS:', [leg['ident'] for leg in LEGS])
+    clients = []
+    aircrafts = [
+        B738(
+            callsign='CAL123',
+            position=get_start_leg('RCTP', '05L').position,
+            flightplan=Flightplan(
+                departure_airport='RCTP',
+                arrival_airport='RCKH',
+                flight_rules='I',
+                cruise_speed=Speed(mph=489),
+                route='CHALI T3 MKG W6 TNN',
+                cruise_altitude=200,
 
-    async def tick_move_aircraft(client_socket):
-        pos = Position(25.07282418224231, 121.21606845136498)
-        last_time = time.time()
-        current_leg_index = 0
-        while True:
-            bearing, distance_to_leg = get_bearing_distance(
-                pos,
-                LEGS[current_leg_index]['position']
-            )
-            now = time.time()
-            time_diff = now - last_time
-            last_time = now
-            distance = Distance(meters=(GROUND_SPEED / 3.6)
-                                * time_diff)  # meters
+            ),
+            sid_legs=get_sid_legs('RCTP', '05L', 'CHAL1C'),
+            star_legs=get_star_legs('RCKH', 'TNN1J'),
+            approach_legs=get_app_legs('RCKH', 'I09')[0]
+        ),
+        B738(
+            callsign='CAL318',
+            position=get_start_leg('RCTP', '05R').position,
+            flightplan=Flightplan(
+                departure_airport='RCTP',
+                arrival_airport='RCQC',
+                flight_rules='I',
+                cruise_speed=Speed(mph=489),
+                route='CHALI T3 AJENT',
+                cruise_altitude=200,
+            ),
+            sid_legs=get_sid_legs('RCTP', '05R', 'CHAL1A'),
+            approach_legs=get_app_legs(
+                'RCQC', 'I02', transition_name='MASON')[0]
+        ),
+        B738(
+            callsign='EVA737',
+            position=get_fix_by_ident(
+                'JAMMY', 'RC').position.set_altitude(37000),
+            speed=Speed(mph=489),
+            is_on_ground=False,
+            flightplan=Flightplan(
+                departure_airport='VHHH',
+                arrival_airport='RCTP',
+                flight_rules='I',
+                cruise_speed=Speed(mph=489),
+                route='OCEAN V3 ENVAR M750 TONGA',
+                cruise_altitude=370,
+            ),
+            enroute_legs=[],
+            approach_legs=get_app_legs(
+                'RCTP', 'I05R', transition_name='JAMMY')[0]
+        ),
+    ]
 
-            print('move meters:', distance.meters)
-
-            if distance_to_leg < distance:
-                if current_leg_index == len(LEGS) - 1:
-                    break
-                current_leg_index += 1
+    def send_all_aircraft_position():
+        for aircraft in [*aircrafts]:
+            # arrived
+            if len(aircraft.legs) == 0:
+                aircrafts.remove(aircraft)
                 continue
 
-            print('Next leg:', LEGS[current_leg_index]['ident'])
+            position_update_message = aircraft.get_position_update_message()
+            for client in actived_clients.values():
+                print()
+                client.send(str(position_update_message))
 
-            pos = fix_radial_distance(pos, bearing, distance)
+                if client.is_send_flightplan == False and client.callsign is not None:
+                    flightplan_message = aircraft.get_flightplan_message(
+                        client.callsign
+                    )
+                    if flightplan_message is not None:
+                        client.send(str(flightplan_message))
+            for client in clients:
+                if client.callsign is not None:
+                    client.is_send_flightplan = True
+    t = set_interval(send_all_aircraft_position, 2)
 
-            message = PilotPositionUpdateMessage(
-                AC_CALLSIGN,
-                'N',
-                SQUAWK_CODE,
-                '4',
-                pos,
-                ALTITUDE,
-                GROUND_SPEED,
-                PBH_TUPLE,
-                PRESSURE_DELTA
-            )
-            await send(client_socket, str(message))
-            time.sleep(2)
+    loop = asyncio.get_running_loop()
 
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('0.0.0.0', 6809))
-    server.listen(5)
-    print('TCP Server start')
+    server = await loop.create_server(
+        lambda: Client(),
+        '0.0.0.0',
+        6809
+    )
 
-    while True:
-        client_socket, address = server.accept()
-        print('Connected to', address)
-        await send_flight_plan(client_socket)
-        await tick_move_aircraft(client_socket)
+    async with server:
+        await server.serve_forever()
+        print('TCP Server start')
 
 if __name__ == '__main__':
     asyncio.run(main())

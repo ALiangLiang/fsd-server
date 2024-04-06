@@ -5,8 +5,10 @@ name = "pypi"
 
 [packages]
 geopy = "==2.4.1"
+sqlalchemy = "==2.0.29"
 
 [dev-packages]
+mypy = "*"
 
 [requires]
 python_version = "3.11"

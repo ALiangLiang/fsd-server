@@ -4,7 +4,16 @@ from messages.IMessage import IMessage
 class AddATCMessage(IMessage):
     command = '#AA'
 
-    def __init__(self, source, destination, real_name, account, password, rating, protocol_version='B'):
+    def __init__(
+        self,
+        source: str,
+        destination: str,
+        real_name: str,
+        account: str,
+        password: str,
+        rating: int,
+        protocol_version: str = 'B'
+    ):
         super().__init__()
         self.source = source
         self.destination = destination
@@ -16,8 +25,8 @@ class AddATCMessage(IMessage):
 
     @staticmethod
     def parse_raw_message(raw_message):
-        [_command, source, destination, real_name, account, password,
-            rating, protocol_version] = raw_message.split(':')
+        [source, destination, real_name, account, password,
+            rating, protocol_version] = raw_message[3:].split(':')
         return AddATCMessage(source, destination, real_name, account, password, rating, protocol_version)
 
     def __str__(self):
@@ -27,6 +36,6 @@ class AddATCMessage(IMessage):
             self.real_name,
             self.account,
             self.password,
-            self.rating,
+            str(self.rating),
             self.protocol_version
         ])

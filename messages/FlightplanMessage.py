@@ -1,4 +1,5 @@
 from messages.IMessage import IMessage
+from messages.Time import Time
 
 
 class FlightplanMessage(IMessage):
@@ -6,24 +7,24 @@ class FlightplanMessage(IMessage):
 
     def __init__(
         self,
-        source,
-        destination,
-        flight_rules,
-        type_of_flight,
-        aircraft_type,
-        cruise_speed,
-        departure_airport,
-        estimated_departure,
-        actual_departure,
-        cruise_alt,
-        arrival_airport,
-        hours_en_route,
-        minites_enroute,
-        hours_fuel,
-        minutes_fuel,
-        alternate_airport,
-        remarks,
-        route
+        source: str,
+        destination: str,
+        flight_rules: str,
+        type_of_flight: str,
+        aircraft_type: str,
+        cruise_speed: str,
+        departure_airport: str,
+        estimated_departure: Time,
+        actual_departure: Time,
+        cruise_alt: str,
+        arrival_airport: str,
+        hours_en_route: int,
+        minutes_enroute: int,
+        hours_fuel: int,
+        minutes_fuel: int,
+        route: str,
+        alternate_airport: str = '',
+        remarks: str = '',
     ):
         super().__init__()
         self.source = source
@@ -38,7 +39,7 @@ class FlightplanMessage(IMessage):
         self.cruise_alt = cruise_alt
         self.arrival_airport = arrival_airport
         self.hours_en_route = hours_en_route
-        self.minutes_enroute = minites_enroute
+        self.minutes_enroute = minutes_enroute
         self.hours_fuel = hours_fuel
         self.minutes_fuel = minutes_fuel
         self.alternate_airport = alternate_airport
