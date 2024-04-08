@@ -2,6 +2,8 @@ from .airport import Airport
 from .airway import Airway
 from .approach import Approach
 from .approach_leg import ApproachLeg
+from .fix import Fix
+from .ndb import Ndb
 from .runway import Runway
 from .runway_end import RunwayEnd
 from .transition import Transition

@@ -91,6 +91,7 @@ class Airport(Base):
     runways: Mapped[List["Runway"]] = relationship(back_populates="airport")
     approaches: Mapped[List["Approach"]] = relationship(
         back_populates="airport")
+    ndb: Mapped[List["Ndb"]] = relationship(back_populates="airport")
 
     @property
     def position(self):
