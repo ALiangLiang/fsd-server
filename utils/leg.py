@@ -1,6 +1,6 @@
 from messages.Position import Position
 
-from db.models import ApproachLeg, Airway, RunwayEnd, Waypoint, ProcedureLeg
+from db.models import Fix, Airway, RunwayEnd, ProcedureLeg
 
 
 class Leg:
@@ -11,22 +11,24 @@ class Leg:
         lonx: float,
         altitude: float | None = None,
         is_missed: bool = False,
-        waypoint: Waypoint | None = None
+        fix: Fix | None = None
     ):
         self.ident = ident
         self.laty = laty
         self.lonx = lonx
         self.altitude = altitude
         self.is_missed = is_missed
-        self.waypoint = waypoint
+        self.fix = fix
 
     @classmethod
-    def from_procedure_leg(cls, procedure_leg: ProcedureLeg):
+    def from_procedure_leg(cls, procedure_leg: ProcedureLeg, fix: Fix | None = None):
+        is_missed_flag = getattr(procedure_leg, 'is_missed', 0)
         return cls(
             ident=procedure_leg.fix_ident,
             laty=procedure_leg.fix_laty,
             lonx=procedure_leg.fix_lonx,
-            is_missed=getattr(procedure_leg, 'is_missed', False),
+            fix=fix,
+            is_missed=bool(is_missed_flag),
         )
 
     @classmethod
@@ -35,16 +37,16 @@ class Leg:
             ident=airway.from_waypoint.ident,
             laty=airway.from_laty,
             lonx=airway.from_lonx,
-            waypoint=airway.from_waypoint
+            fix=airway.from_waypoint
         )
 
     @classmethod
     def from_airway_end(cls, airway: Airway):
         return cls(
-            ident=airway.airway_name,
+            ident=airway.to_waypoint.ident,
             laty=airway.to_laty,
             lonx=airway.to_lonx,
-            waypoint=airway.to_waypoint
+            fix=airway.to_waypoint
         )
 
     @classmethod

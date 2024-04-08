@@ -53,8 +53,6 @@ class Client(asyncio.Protocol):
 
     def data_received(self, data):
         raw_message = data.decode()
-        print('Data received:', raw_message)
-
         major_command = raw_message[0]
         if major_command == '#':
             minor_command = raw_message[1:2]
@@ -70,7 +68,8 @@ class Client(asyncio.Protocol):
             message = ATCPositionUpdateMessage.parse_raw_message(
                 raw_message)
             self.callsign = message.callsign
-            print('callsign', self.callsign)
+        else:
+            print('Data received:', raw_message)
 
 
 actived_clients: dict[str, Client] = {}

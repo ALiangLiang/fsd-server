@@ -1,8 +1,15 @@
 from messages.FlightplanMessage import FlightplanMessage
 from messages.Time import Time
-from helpers import get_airways_between_fixs, airways_to_legs
+from helpers import (
+    get_airways_between_fixs,
+    airways_to_legs,
+    get_sid_approaches_by_airport_ident,
+    get_star_approaches_by_airport_ident,
+    get_approach_approaches_by_airport_ident
+)
 from utils.leg import Leg
 from utils.physics import Speed
+from db.models import Approach
 
 
 class Flightplan:
@@ -50,7 +57,7 @@ class Flightplan:
             airway_name = items.pop(0)
             to_fix_name = items.pop(0)
             new_airways = get_airways_between_fixs(
-                airway_name, legs[-1].waypoint, to_fix_name)
+                airway_name, legs[-1].fix, to_fix_name)
             new_legs = airways_to_legs(new_airways)
             extended_legs = new_legs[1:]
             legs.extend(extended_legs)
@@ -77,3 +84,35 @@ class Flightplan:
             remarks=self.remarks,
             route=self.route
         )
+
+    def get_usable_sids(self):
+        sid_approaches = get_sid_approaches_by_airport_ident(
+            self.departure_airport)
+        end_leg_waypoint_ident = self.route.split(' ')[0]
+        return [
+            sa for sa in sid_approaches if sa.approach_legs[-1].fix_ident == end_leg_waypoint_ident
+        ]
+
+    def get_usable_stars(self):
+        star_approaches = get_star_approaches_by_airport_ident(
+            self.arrival_airport)
+        start_leg_waypoint_ident = self.route.split(' ')[-1]
+        return [
+            sa for sa in star_approaches if sa.approach_legs[0].fix_ident == start_leg_waypoint_ident
+        ]
+
+    def get_usable_approaches(self, star_approach: Approach | None = None):
+        start_leg_waypoint_ident = self.route.split(
+            ' ')[-1] if star_approach is None else star_approach.approach_legs[-1].fix_ident
+        approach_approaches = get_approach_approaches_by_airport_ident(
+            self.arrival_airport)
+
+        usable_approaches: list[Approach] = []
+        for aa in approach_approaches:
+            if aa.approach_legs[0].fix_ident == start_leg_waypoint_ident:
+                usable_approaches.append(aa)
+            else:
+                for t in aa.transitions:
+                    if t.fix_ident == start_leg_waypoint_ident:
+                        usable_approaches.append(aa)
+        return usable_approaches

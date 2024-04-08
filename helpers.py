@@ -1,10 +1,22 @@
 from datetime import timedelta
 
 from geopy.distance import Distance
+from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 
 from db.init import session
-from db.models import Airport, Airway, Approach, ProcedureLeg, Waypoint, Vor, Runway, TransitionLeg
+from db.models import (
+    Airport,
+    Airway,
+    Approach,
+    ProcedureLeg,
+    Fix,
+    Waypoint,
+    Vor,
+    Ndb,
+    Runway,
+    TransitionLeg
+)
 from utils.leg import Leg
 from utils.physics import Acceleration
 
@@ -23,7 +35,7 @@ def get_runway_end_by_airport_n_runway(dep_airport: str, dep_runway: str):
         .options(joinedload(Runway.primary_end))
         .options(joinedload(Runway.secondary_end))
     ).filter(Airport.ident == dep_airport).first()
-    if (airport is None):
+    if airport is None:
         return None
     for runway in airport.runways:
         if runway.primary_end.name == dep_runway:
@@ -32,35 +44,61 @@ def get_runway_end_by_airport_n_runway(dep_airport: str, dep_runway: str):
             return runway.secondary_end
 
 
-def get_fix_by_ident(ident: str, region: str | None = None):
+def get_fix_by_ident(ident: str, region: str | None = None) -> Fix | None:
     _query = session.query(Waypoint).filter(Waypoint.ident == ident)
     if (region is not None):
         _query = _query.filter(Waypoint.region == region)
-    return _query.first()
+    waypoint: Waypoint | None = _query.first()
+    if waypoint is not None:
+        return waypoint
+
+    _query = session.query(Ndb).filter(Ndb.ident == ident)
+    if (region is not None):
+        _query = _query.filter(Ndb.region == region)
+    ndb: Ndb | None = _query.first()
+    if ndb is not None:
+        return ndb
+
+    _query = session.query(Vor).filter(Vor.ident == ident)
+    if (region is not None):
+        _query = _query.filter(Vor.region == region)
+    vor: Vor | None = _query.first()
+    if vor is not None:
+        return vor
+
+    return None
 
 
-def fill_position_on_legs(procedure_leg: list[ProcedureLeg]):
+def fill_position_on_legs(procedure_legs: list[ProcedureLeg], airport_ident: str | None = None):
+    """
+    params:
+        procedure_legs: list[ProcedureLeg]
+        airport_ident: str | None
+    The approach legs in diffent data source, fix_airport_ident may be null
+    """
     legs: list[Leg] = []
-    for al in procedure_leg:
-        if al.fix_lonx is not None and al.fix_laty is not None:
+    for pl in procedure_legs:
+        if pl.fix_lonx is None or pl.fix_laty is None:
             continue
 
-        if al.fix_type == 'R':  # runway
-            runway_end_name = al.fix_ident[2:] if al.fix_ident.startswith(
-                'RW') else al.fix_ident
+        if pl.fix_type == 'R':  # runway
+            runway_end_name = pl.fix_ident[2:] if pl.fix_ident.startswith(
+                'RW') else pl.fix_ident
             runway_end = get_runway_end_by_airport_n_runway(
-                al.fix_airport_ident, runway_end_name)
-            al.fix_lonx = runway_end.lonx
-            al.fix_laty = runway_end.laty
-            legs.append(Leg.from_procedure_leg(al))
+                airport_ident or pl.fix_airport_ident,
+                runway_end_name
+            )
+            pl.fix_lonx = runway_end.lonx
+            pl.fix_laty = runway_end.laty
+            legs.append(Leg.from_procedure_leg(pl))
         else:
-            fix = get_fix_by_ident(al.fix_ident, al.fix_region)
+            fix = get_fix_by_ident(pl.fix_ident, pl.fix_region)
             if fix is None:
                 continue
-            al.fix_lonx = fix.lonx
-            al.fix_laty = fix.laty
-            leg = Leg.from_procedure_leg(al)
-            leg.waypoint = fix
+            pl.fix_lonx = fix.lonx
+            pl.fix_laty = fix.laty
+            leg = Leg.from_procedure_leg(pl)
+            leg.fix = fix
             legs.append(leg)
 
     return legs
@@ -86,6 +124,27 @@ def get_sid_legs(dep_airport: str, dep_runway: str, sid: str):
     return fill_position_on_legs(approach.approach_legs)
 
 
+def get_sid_approaches_by_airport_ident(airport_ident: str) -> list[Approach]:
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).filter(
+        Approach.airport_ident == airport_ident,
+        Approach.suffix == 'D'
+    ).all()
+
+
+def get_star_approaches_by_airport_ident(airport_ident: str) -> list[Approach]:
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).filter(
+        Approach.airport_ident == airport_ident,
+        Approach.suffix == 'A'
+    ).all()
+
+
+def get_approach_approaches_by_airport_ident(airport_ident: str):
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).filter(
+        Approach.airport_ident == airport_ident,
+        or_(Approach.suffix == None, Approach.suffix == '')
+    ).all()
+
+
 def get_star_legs(arr_airport: str, star: str):
     approach = session.query(Approach).options(
         joinedload(Approach.approach_legs)
@@ -102,7 +161,7 @@ def get_app_legs(arr_airport: str, app_name: str, transition_name: str | None = 
         joinedload(Approach.approach_legs)
     ).filter(Approach.airport_ident == arr_airport,
              Approach.arinc_name == app_name,
-             Approach.suffix == None).first()
+             or_(Approach.suffix == None, Approach.suffix == '')).first()
     if approach is None:
         return []
 
@@ -184,7 +243,6 @@ def get_legs_by_route_str(route_str: str):
 
     # start
     legs = [get_start_leg(dep_airport, dep_runway)]
-    print(legs)
 
     # SID
     legs.extend(
@@ -196,7 +254,7 @@ def get_legs_by_route_str(route_str: str):
         airway_name = items.pop(0)
         to_fix_name = items.pop(0)
         new_airways = get_airways_between_fixs(
-            airway_name, legs[-1].waypoint, to_fix_name)
+            airway_name, legs[-1].fix, to_fix_name)
         new_legs = airways_to_legs(new_airways)
         extended_legs = new_legs[1:]
         legs.extend(extended_legs)

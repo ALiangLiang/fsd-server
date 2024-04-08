@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import Enum
 
 from geopy.distance import Distance
 
@@ -11,7 +10,7 @@ from utils.flightplan import Flightplan
 from utils.leg import Leg
 from utils.unit import lbs_to_kg
 from utils.physics import get_acceleration_by_newton_2th, Speed
-from helpers import get_displacement_by_seconds
+from helpers import get_displacement_by_seconds, get_fix_by_ident
 from messages.PilotPositionUpdateMessage import PilotPositionUpdateMessage, TransponderMode
 from messages.Position import Position
 
@@ -26,27 +25,36 @@ def normalize_cruise_speed(flight_level: int):
     return str(flight_level).zfill(4)
 
 
-def combine_legs(
-    sid_legs: list[Leg],
-    enroute_legs: list[Leg],
-    star_legs: list[Leg],
-    approach_legs: list[Leg]
-):
-    # prevent duplicate leg between legs
-    legs: list[Leg] = [*sid_legs]
-    if len(legs) == 0:
-        legs += enroute_legs
-    elif len(enroute_legs) > 0:
-        legs += enroute_legs[1:] if legs[-1].ident == enroute_legs[0].ident else enroute_legs
-    if len(legs) == 0:
-        legs += star_legs
-    elif len(star_legs) > 0:
-        legs += star_legs[1:] if legs[-1].ident == star_legs[0].ident else star_legs
-    if len(legs) == 0:
-        legs += approach_legs
-    elif len(approach_legs) > 0:
-        legs += approach_legs[1:] if legs[-1].ident == approach_legs[0].ident else approach_legs
+def combine_legs(*legs_list: list[Leg]):
+    legs: list[Leg] = []
+    for legs_ in legs_list:
+        if len(legs) == 0:
+            legs += legs_
+        elif len(legs_) > 0:
+            legs += legs_[1:] if legs[-1].ident == legs_[0].ident else legs_
     return legs
+
+# def combine_legs(
+#     sid_legs: list[Leg],
+#     enroute_legs: list[Leg],
+#     star_legs: list[Leg],
+#     approach_legs: list[Leg]
+# ):
+#     # prevent duplicate leg between legs
+#     legs: list[Leg] = [*sid_legs]
+#     if len(legs) == 0:
+#         legs += enroute_legs
+#     elif len(enroute_legs) > 0:
+#         legs += enroute_legs[1:] if legs[-1].ident == enroute_legs[0].ident else enroute_legs
+#     if len(legs) == 0:
+#         legs += star_legs
+#     elif len(star_legs) > 0:
+#         legs += star_legs[1:] if legs[-1].ident == star_legs[0].ident else star_legs
+#     if len(legs) == 0:
+#         legs += approach_legs
+#     elif len(approach_legs) > 0:
+#         legs += approach_legs[1:] if legs[-1].ident == approach_legs[0].ident else approach_legs
+#     return legs
 
 
 class Aircraft:
@@ -65,7 +73,7 @@ class Aircraft:
     def __init__(
         self,
         callsign: str,
-        position: Position,
+        position: Position | None = None,
         speed: Speed = Speed(0),
         is_on_ground: bool = True,
         squawk_code: str = '2000',
@@ -78,8 +86,27 @@ class Aircraft:
         approach_legs: list[Leg] = [],
     ):
         if enroute_legs is None:
-            enroute_legs = flightplan.get_legs(
-                sid_legs[-1]) if (len(sid_legs) > 0 and flightplan is not None) else []
+            if len(sid_legs) == 0:
+                if flightplan is None:
+                    enroute_legs = []
+                else:
+                    # guess enroute legs
+                    usable_sids = flightplan.get_usable_sids()
+                    if len(usable_sids) == 0:
+                        enroute_legs = []
+                    else:
+                        sid_end_approach_leg = usable_sids[0].approach_legs[-1]
+                        fix = get_fix_by_ident(
+                            sid_end_approach_leg.fix_ident, sid_end_approach_leg.fix_region)
+                        sid_end_leg = Leg.from_procedure_leg(
+                            sid_end_approach_leg,
+                            fix
+                        )
+                        enroute_legs = flightplan.get_legs(sid_end_leg)
+            else:
+                enroute_legs = flightplan.get_legs(
+                    sid_legs[-1]) if (len(sid_legs) > 0 and flightplan is not None) else []
+
         self.flightplan = flightplan
         self.legs = combine_legs(
             sid_legs,
@@ -108,6 +135,46 @@ class Aircraft:
         self._is_pause = False
         self._last_send_position_time = datetime.now()
 
+    def set_position(self, position: Position):
+        self.position = position
+        return self
+
+    def set_sid_legs(self, sid_legs: list[Leg]):
+        self.sid_legs = sid_legs
+        self.legs = combine_legs(
+            sid_legs,
+            self.flightplan.get_legs(
+                sid_legs[-1]) if self.flightplan is not None else [],
+            self.star_legs,
+            self.approach_legs
+        )
+        return self
+
+    def set_star_n_approach_legs(self, star_legs: list[Leg], approach_legs: list[Leg]):
+        old_legs = combine_legs(self.star_legs, self.approach_legs)
+        self.remove_continuously_end_legs(old_legs)
+
+        self.star_legs = star_legs
+        self.approach_legs = approach_legs
+        self.legs = combine_legs(
+            self.sid_legs,
+            self.flightplan.get_legs(
+                self.sid_legs[-1]) if self.flightplan is not None else [],
+            star_legs,
+            approach_legs
+        )
+        return self
+
+    def remove_continuously_end_legs(self, legs: list[Leg]):
+        is_matched = False
+        for leg in reversed(legs):
+            if self.legs[-1] != leg:
+                is_matched = False
+                break
+            is_matched = True
+        if is_matched:
+            self.legs = self.legs[:-len(legs)]
+
     def direct_to_leg(self, leg: Leg):
         new_legs = [*self.legs]
         while new_legs.pop(0) != leg:
@@ -125,15 +192,16 @@ class Aircraft:
     # TODO: adjust roc by leg restriction
     # TODO: support smooth turn
     def update_status(self):
-        bearing = self.heading
-        distance_to_leg = Distance(meters=1500)
-        if len(self.legs) > 0:
-            bearing, distance_to_leg = get_bearing_distance(
-                self.position,
-                self.legs[0].position
-            )
+        if len(self.legs) == 0:
+            return
+
+        bearing, distance_to_leg = get_bearing_distance(
+            self.position,
+            self.legs[0].position
+        )
         self.heading = bearing
 
+        # updat speed
         now = datetime.now()
         time_diff = now - self._last_send_position_time
         self._last_send_position_time = now
@@ -148,6 +216,7 @@ class Aircraft:
             self.speed = self.flightplan.cruise_speed
             distance: Distance = self.speed * time_diff
 
+        # update altitude
         if self.speed > self.vr:
             # airborne
             self.is_on_ground = False
@@ -157,7 +226,13 @@ class Aircraft:
                 roc = Speed(fpm=5000)
             elif self.position.altitude_ < 10000:
                 roc = Speed(fpm=2500)
-            self.position.add_altitude((roc * time_diff).feet)
+            elif self.position.altitude_ < self.flightplan.cruise_altitude:
+                added_altitude = max(
+                    (roc * time_diff),
+                    Distance(feets=self.flightplan.cruise_altitude -
+                             self.position.altitude_)
+                )
+                self.position.add_altitude(added_altitude.feet)
 
         #     if is_send_airborne_msg == False and self.position.altitude_ > 500:
         #         text_message = TextMessage(
@@ -204,92 +279,3 @@ class Aircraft:
             source=self.callsign,
             destination=destination_callsign,
         )
-
-    # async def tick_move_aircraft(
-    #     self,
-    #     dep_airport: str,
-    #     dep_runway: str,
-    #     arr_airport: str,
-    #     arr_runway: str,
-    #     route_str: str,
-    #     flight_level: int,
-    #     cruise_speed: int,
-    #     remark: str = '',
-    #     vr: int = 145,  # kts
-    # ):
-    #     flight_level = normalize_flight_level(flight_level)
-    #     cruise_speed = normalize_cruise_speed(cruise_speed)
-    #     full_route_str = f"{dep_airport}/{dep_runway} N{cruise_speed}F{flight_level} {route_str} {arr_airport}/I{arr_runway}"
-    #     legs = get_legs_by_route_str(full_route_str)
-    #     pos = legs[0].position
-    #     start_time = time.time()
-    #     last_time = start_time
-    #     last_speed = 0
-    #     last_altitude = legs[0].position.altitude_ or 0
-    #     is_send_airborne_msg = False
-    #     is_send_flightplan = False
-    #     is_on_ground = True
-    #     current_leg_index = 0
-    #     while self._is_pause == False:
-    #         if is_send_flightplan == False and last_time - start_time > 3:
-    #             await send_flight_plan(client_socket)
-    #             is_send_flightplan = True
-
-    #         bearing, distance_to_leg = get_bearing_distance(
-    #             pos,
-    #             legs[current_leg_index].position
-    #         )
-    #         now = time.time()
-    #         time_diff = now - last_time
-    #         last_time = now
-    #         if last_speed < CRUISE_SPEED:
-    #             distance = get_displacement_by_seconds(
-    #                 TAKEOFF_ACCELERATION,
-    #                 time_diff,
-    #                 last_speed
-    #             )
-    #             last_speed += TAKEOFF_ACCELERATION * time_diff
-    #         else:
-    #             last_speed = CRUISE_SPEED
-    #             distance = Distance(meters=last_speed * time_diff)
-
-    #         if last_speed > vr:
-    #             # airborne
-    #             is_on_ground = False
-    #             last_altitude += RoC * time_diff
-
-    #             if is_send_airborne_msg == False and last_altitude > 500:
-    #                 text_message = TextMessage(
-    #                     AC_CALLSIGN,
-    #                     frequency_to_abbr(FREQUENCE),
-    #                     'Taipei Tower, Good evening, ' + AC_CALLSIGN + ', airborne'
-    #                 )
-    #                 await send(client_socket, str(text_message))
-    #                 is_send_airborne_msg = True
-
-    #         print('move meters:', distance.meters, 'speed:', last_speed,
-    #               'altitude:', last_altitude, 'on ground:', is_on_ground)
-
-    #         if distance_to_leg < distance:
-    #             if current_leg_index == len(legs) - 1:
-    #                 break
-    #             current_leg_index += 1
-    #             continue
-
-    #         print('Next leg:', legs[current_leg_index].ident)
-
-    #         pos = fix_radial_distance(pos, bearing, distance)
-
-    #         message = PilotPositionUpdateMessage(
-    #             AC_CALLSIGN,
-    #             'N',
-    #             SQUAWK_CODE,
-    #             '4',
-    #             pos,
-    #             last_altitude,
-    #             last_speed,
-    #             (*PBH_TUPLE[:2], is_on_ground),
-    #             PRESSURE_DELTA
-    #         )
-    #         await send(client_socket, str(message))
-    #         time.sleep(2)
