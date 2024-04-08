@@ -5,16 +5,7 @@ import db.init
 from aircrafts.b738 import B738
 from messages.ATCPositionUpdateMessage import ATCPositionUpdateMessage
 from messages.AddATCMessage import AddATCMessage
-from messages.Position import Position
-from utils.flightplan import Flightplan
-from utils.physics import Speed
-from helpers import (
-    get_start_leg,
-    get_sid_legs,
-    get_star_legs,
-    get_app_legs,
-    get_fix_by_ident,
-)
+from utils.aircraft_factory import AircraftFactory
 
 
 def set_interval(func, sec):
@@ -77,56 +68,13 @@ actived_clients: dict[str, Client] = {}
 
 async def main():
     clients = []
+    factory = AircraftFactory()
     aircrafts = [
-        B738(
-            callsign='CAL123',
-            position=get_start_leg('RCTP', '05L').position,
-            flightplan=Flightplan(
-                departure_airport='RCTP',
-                arrival_airport='RCKH',
-                flight_rules='I',
-                cruise_speed=Speed(mph=489),
-                route='CHALI T3 MKG W6 TNN',
-                cruise_altitude=200,
-
-            ),
-            sid_legs=get_sid_legs('RCTP', '05L', 'CHAL1C'),
-            star_legs=get_star_legs('RCKH', 'TNN1J'),
-            approach_legs=get_app_legs('RCKH', 'I09')[0]
-        ),
-        B738(
-            callsign='CAL318',
-            position=get_start_leg('RCTP', '05R').position,
-            flightplan=Flightplan(
-                departure_airport='RCTP',
-                arrival_airport='RCQC',
-                flight_rules='I',
-                cruise_speed=Speed(mph=489),
-                route='CHALI T3 AJENT',
-                cruise_altitude=200,
-            ),
-            sid_legs=get_sid_legs('RCTP', '05R', 'CHAL1A'),
-            approach_legs=get_app_legs(
-                'RCQC', 'I02', transition_name='MASON')[0]
-        ),
-        B738(
-            callsign='EVA737',
-            position=get_fix_by_ident(
-                'JAMMY', 'RC').position.set_altitude(37000),
-            speed=Speed(mph=489),
-            is_on_ground=False,
-            flightplan=Flightplan(
-                departure_airport='VHHH',
-                arrival_airport='RCTP',
-                flight_rules='I',
-                cruise_speed=Speed(mph=489),
-                route='OCEAN V3 ENVAR M750 TONGA',
-                cruise_altitude=370,
-            ),
-            enroute_legs=[],
-            approach_legs=get_app_legs(
-                'RCTP', 'I05R', transition_name='JAMMY')[0]
-        ),
+        factory.generate_w_random_situation(),
+        factory.generate_w_random_situation(),
+        factory.generate_w_random_situation(),
+        factory.generate_w_random_situation(),
+        factory.generate_w_random_situation(),
     ]
 
     def send_all_aircraft_position():

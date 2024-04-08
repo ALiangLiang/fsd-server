@@ -3,6 +3,7 @@ __pycache__/
 *$py.class
 
 *.sqlite
+*.sqlite-journal
 CIFP/
 earth_fix.dat
 earth_nav.dat

@@ -56,6 +56,46 @@ flightplans = [
         route='YILAN B591 GI',
         cruise_altitude=180,
     ),
+    Flightplan(
+        departure_airport='RCTP',
+        arrival_airport='RJBB',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='MOLKA M750 MOMPA Y451 HKC Y45 OOITA Y351 SALTY Y35 BERTH',
+        cruise_altitude=390,
+    ),
+    Flightplan(
+        departure_airport='RJBB',
+        arrival_airport='RCTP',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='MAIKO Y34 SUKMO Y50 IGMON A1 DRAKE',
+        cruise_altitude=380,
+    ),
+    Flightplan(
+        departure_airport='RCTP',
+        arrival_airport='ROAH',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='ROBIN R583 BORDO',
+        cruise_altitude=330,
+    ),
+    Flightplan(
+        departure_airport='ROAH',
+        arrival_airport='RCTP',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='GANJU Y576 LILRA Y573 SEDKU R595 GRACE',
+        cruise_altitude=320,
+    ),
+    Flightplan(
+        departure_airport='RCTP',
+        arrival_airport='ZSPD',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route=' PIANO L3 VIOLA R596 SULEM DST B221 SHZ W58 BK',
+        cruise_altitude=370,
+    ),
 ]
 
 
@@ -85,55 +125,61 @@ class AircraftFactory:
         # else:
         flightplan = random.choice(flightplans)
         callsign = self.generate_callsign()
-        aircraft = B738(
-            callsign=callsign,
-            flightplan=flightplan,
-            is_on_ground=True
-        )
 
-        usable_sids = flightplan.get_usable_sids()
-        used_sid = random.choice(usable_sids)
-        aircraft.set_sid_legs(
-            fill_position_on_legs(
-                used_sid.approach_legs,
-                flightplan.departure_airport
+        try:
+            aircraft = B738(
+                callsign=callsign,
+                flightplan=flightplan,
+                is_on_ground=True
             )
-        )
-        aircraft.set_position(
-            get_start_leg(used_sid.airport_ident,
-                          used_sid.runway_name).position
-        )
 
-        usable_stars = flightplan.get_usable_stars()
-        used_star = random.choice(usable_stars) if len(
-            usable_stars) != 0 else None
-        used_star_last_fix_ident = used_star.approach_legs[-1].fix_ident if used_star is not None else None
-        usable_approaches = flightplan.get_usable_approaches(used_star)
-        used_approach = random.choice(usable_approaches) if len(
-            usable_approaches) != 0 else None
-        usable_transitions = []
-        if used_approach and (used_approach.approach_legs[0].fix_ident != used_star_last_fix_ident):
-            usable_transitions = [
-                t for t in used_approach.transitions if t.fix_ident == used_star_last_fix_ident
-            ]
-        used_transition = None
-        if len(usable_transitions) != 0:
-            used_transition = random.choice(usable_transitions)
-
-        approach_legs = used_approach.approach_legs if used_approach is not None else []
-        not_missed_approach_legs = [
-            al for al in approach_legs if al.is_missed == 0]
-        aircraft.set_star_n_approach_legs(
-            fill_position_on_legs(
-                used_star.approach_legs if used_star is not None else [],
-                flightplan.arrival_airport
-            ),
-            fill_position_on_legs(
-                (used_transition.transition_legs if used_transition is not None else []) +
-                not_missed_approach_legs,
-                flightplan.arrival_airport
+            usable_sids = flightplan.get_usable_sids()
+            used_sid = random.choice(usable_sids)
+            aircraft.set_sid_legs(
+                fill_position_on_legs(
+                    used_sid.approach_legs,
+                    flightplan.departure_airport
+                )
             )
-        )
+            aircraft.set_position(
+                get_start_leg(used_sid.airport_ident,
+                              used_sid.runway_name).position
+            )
 
-        self.aircrafts[callsign] = aircraft
-        return aircraft
+            usable_stars = flightplan.get_usable_stars()
+            used_star = random.choice(usable_stars) if len(
+                usable_stars) != 0 else None
+            used_star_last_fix_ident = used_star.approach_legs[-1].fix_ident if used_star is not None else None
+            usable_approaches = flightplan.get_usable_approaches(used_star)
+            used_approach = random.choice(usable_approaches) if len(
+                usable_approaches) != 0 else None
+            usable_transitions = []
+            if used_approach and (used_approach.approach_legs[0].fix_ident != used_star_last_fix_ident):
+                usable_transitions = [
+                    t for t in used_approach.transitions if t.fix_ident == used_star_last_fix_ident
+                ]
+            used_transition = None
+            if len(usable_transitions) != 0:
+                used_transition = random.choice(usable_transitions)
+
+            approach_legs = used_approach.approach_legs if used_approach is not None else []
+            not_missed_approach_legs = [
+                al for al in approach_legs if al.is_missed == 0]
+            aircraft.set_star_n_approach_legs(
+                fill_position_on_legs(
+                    used_star.approach_legs if used_star is not None else [],
+                    flightplan.arrival_airport
+                ),
+                fill_position_on_legs(
+                    (used_transition.transition_legs if used_transition is not None else []) +
+                    not_missed_approach_legs,
+                    flightplan.arrival_airport
+                )
+            )
+
+            self.aircrafts[callsign] = aircraft
+            return aircraft
+
+        except Exception as e:
+            print(flightplan)
+            return None
