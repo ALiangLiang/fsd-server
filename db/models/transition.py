@@ -1,7 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship, Mapped
 
 from db.init import Base
+
+if TYPE_CHECKING:
+    from .approach import Approach
+    from .transition_leg import TransitionLeg
 
 
 class Transition(Base):
@@ -24,4 +30,5 @@ class Transition(Base):
     dme_distance = Column(Integer)
 
     approach: Mapped['Approach'] = relationship(foreign_keys=[approach_id])
-    transition_legs: Mapped[list['TransitionLeg']] = relationship(back_populates='transition')
+    transition_legs: Mapped[list['TransitionLeg']
+                            ] = relationship(back_populates='transition')

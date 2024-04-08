@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped
 
 from db.init import Base
 from messages.Position import Position
+
+if TYPE_CHECKING:
+    from .airport import Airport
+    from .runway_end import RunwayEnd
 
 
 class Runway(Base):
@@ -36,8 +42,10 @@ class Runway(Base):
     laty = Column(Float, nullable=False)
 
     airport: Mapped["Airport"] = relationship(back_populates="runways")
-    primary_end = relationship("RunwayEnd", foreign_keys=[primary_end_id])
-    secondary_end = relationship("RunwayEnd", foreign_keys=[secondary_end_id])
+    primary_end: Mapped["RunwayEnd"] = relationship(
+        foreign_keys=[primary_end_id])
+    secondary_end: Mapped["RunwayEnd"] = relationship(
+        foreign_keys=[secondary_end_id])
 
     @property
     def position(self):

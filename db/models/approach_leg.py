@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.orm import relationship, Mapped
 
 from db.init import Base
 from .procedure_leg import ProcedureLeg
+
+if TYPE_CHECKING:
+    from .approach import Approach
 
 
 class ApproachLeg(ProcedureLeg, Base):

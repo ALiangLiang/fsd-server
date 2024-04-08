@@ -1,10 +1,13 @@
-from typing import List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.orm import relationship, backref, Mapped
 
 from db.init import Base
 from messages.Position import Position
+
+if TYPE_CHECKING:
+    from .runway import Runway
 
 
 class RunwayEnd(Base):

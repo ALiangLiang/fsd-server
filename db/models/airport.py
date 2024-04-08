@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
@@ -6,6 +6,11 @@ from sqlalchemy.orm import Mapped
 
 from db.init import Base
 from messages.Position import Position
+
+if TYPE_CHECKING:
+    from .runway import Runway
+    from .approach import Approach
+    from .ndb import Ndb
 
 
 class Airport(Base):

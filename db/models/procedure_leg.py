@@ -1,6 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
 
-from db.init import Base
 from messages.Position import Position
 
 

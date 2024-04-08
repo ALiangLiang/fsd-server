@@ -1,8 +1,12 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship, Mapped
 
 from db.init import Base
-from messages.Position import Position
+
+if TYPE_CHECKING:
+    from .waypoint import Waypoint
 
 
 class Airway(Base):

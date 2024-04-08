@@ -1,9 +1,14 @@
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship, Mapped
 
 from db.init import Base
+
+if TYPE_CHECKING:
+    from .airport import Airport
+    from .approach_leg import ApproachLeg
+    from .transition import Transition
 
 
 class Approach(Base):
