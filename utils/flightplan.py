@@ -1,3 +1,5 @@
+from typing import Literal
+
 from messages.FlightplanMessage import FlightplanMessage
 from messages.Time import Time
 from helpers import (
@@ -21,20 +23,24 @@ class Flightplan:
         cruise_altitude: int,  # F200 => 200
         arrival_airport: str,
         route: str,
+        aircraft_icao: str,
         hours_en_route: int = 1,
         minutes_enroute: int = 55,
         hours_fuel: int = 3,
         minutes_fuel: int = 30,
-        type_of_flight: str = 'I',
-        aircraft_type: str = 'S',
+        type_of_flight: Literal['S', 'N', 'G', 'M', 'X'] = 'S',
         estimated_departure: Time = Time(13, 35),
         actual_departure: Time = Time(13, 35),
         alternate_airport: str = '',
         remarks: str = '',
+        number_of_aircraft: int = 1,
+        wake_turbulence_category: str = 'M',
+        equipment: str = '',
+        transponder_types: str = 'LB1',
     ):
         self.flight_rules = flight_rules
         self.type_of_flight = type_of_flight
-        self.aircraft_type = aircraft_type
+        self.aircraft_icao = aircraft_icao
         self.cruise_speed = cruise_speed
         self.departure_airport = departure_airport
         self.estimated_departure = estimated_departure
@@ -48,6 +54,14 @@ class Flightplan:
         self.alternate_airport = alternate_airport
         self.remarks = remarks
         self.route = route
+        self.number_of_aircraft = number_of_aircraft
+        self.wake_turbulence_category = wake_turbulence_category
+        self.equipment = equipment
+        self.transponder_types = transponder_types
+
+    @property
+    def aircraft_type(self):
+        return f'{self.number_of_aircraft}/{self.aircraft_icao}/{self.wake_turbulence_category}-{self.equipment}/{self.transponder_types}'
 
     def get_legs(self, start_leg: Leg):
         legs = [start_leg]
@@ -70,11 +84,11 @@ class Flightplan:
             flight_rules=self.flight_rules,
             type_of_flight=self.type_of_flight,
             aircraft_type=self.aircraft_type,
-            cruise_speed=f"N{str(self.cruise_speed.mph).zfill(4)}",
+            cruise_speed=f"N{str(int(self.cruise_speed.mph)).zfill(4)}",
             departure_airport=self.departure_airport,
             estimated_departure=self.estimated_departure,
             actual_departure=self.actual_departure,
-            cruise_alt=f"F{str(self.cruise_altitude).zfill(3)}",
+            cruise_alt=f"F{str(self.cruise_altitude)[:-2].zfill(3)}",
             arrival_airport=self.arrival_airport,
             hours_en_route=self.hours_en_route,
             minutes_enroute=self.minutes_enroute,
@@ -82,7 +96,7 @@ class Flightplan:
             minutes_fuel=self.minutes_fuel,
             alternate_airport=self.alternate_airport,
             remarks=self.remarks,
-            route=self.route
+            route=self.route,
         )
 
     def get_usable_sids(self):

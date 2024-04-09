@@ -16,7 +16,6 @@ class ATCPositionUpdateMessage(IMessage):
 
     @classmethod
     def parse_raw_message(cls, raw_message):
-        print('raw_message', raw_message)
         callsign, frequency, facility, visibility, rating, latitude, longitude, elevation = \
             raw_message[len(cls.command):].split(':')
         position = Position(float(latitude), float(longitude))

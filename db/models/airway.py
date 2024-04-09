@@ -22,7 +22,7 @@ class Airway(Base):
         'waypoint.waypoint_id'), nullable=False)
     to_waypoint_id = Column(Integer, ForeignKey(
         'waypoint.waypoint_id'), nullable=False)
-    direction = Column(String(1))
+    direction = Column(String(1))  # B: Backward, F: Forward, N: Both
     minimum_altitude = Column(Integer)
     maximum_altitude = Column(Integer)
     left_lonx = Column(Float, nullable=False)

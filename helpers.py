@@ -1,7 +1,8 @@
 from datetime import timedelta
+from typing import Literal
 
 from geopy.distance import Distance
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import joinedload
 
 from db.init import session
@@ -181,10 +182,16 @@ def get_app_legs(arr_airport: str, app_name: str, transition_name: str | None = 
     return not_missed_legs, missed_legs
 
 
-def get_all_airways(airway_name: str, fix: Waypoint):
-    airway = session.query(Airway).filter(
+def get_all_airways(airway_name: str, fix: Waypoint) -> list[Airway]:
+    airway = session.query(Airway).options(
+        joinedload(Airway.from_waypoint),
+        joinedload(Airway.to_waypoint)
+    ).filter(
         Airway.airway_name == airway_name,
-        Airway.from_waypoint_id == fix.waypoint_id
+        or_(
+            Airway.from_waypoint_id == fix.waypoint_id,
+            Airway.to_waypoint_id == fix.waypoint_id
+        )
     ).first()
     if airway is None:
         return []
@@ -195,22 +202,53 @@ def get_all_airways(airway_name: str, fix: Waypoint):
     return airways
 
 
-def get_airways_between_fixs(airway: str, from_fix: Waypoint, to_fix_name: str):
-    airways = get_all_airways(airway, from_fix)
+def filter_airways_by_from_to(
+    airways: list[Airway],
+    direction: Literal['F', 'B'],
+    from_fix: Waypoint,
+    to_fix_name: str
+) -> list[Airway] | None:
     airway_range: list[Airway] = []
-    for a in airways:
+    for a in (airways if direction == 'F' else reversed(airways)):
         if len(airway_range) == 0:
-            if a.from_waypoint.ident == from_fix.ident or a.from_waypoint.ident == to_fix_name:
+            # if a.direction != direction and a.direction != 'N':  # invalid direction
+            #     return None
+            if (
+                # forward or both
+                (a.direction != 'B' and a.from_waypoint_id == from_fix.waypoint_id) or
+                # backward or both
+                (a.direction != 'F' and a.to_waypoint_id == from_fix.waypoint_id)
+            ):
                 airway_range.append(a)
         else:
             airway_range.append(a)
-            if a.to_waypoint.ident == to_fix_name or a.from_waypoint.ident == from_fix.ident:
+            if (
+                # forward or both
+                (a.direction != 'B' and a.to_waypoint.ident == to_fix_name) or
+                # backward or both
+                (a.direction != 'F' and a.from_waypoint.ident == to_fix_name)
+            ):
                 return airway_range
+    return None
+
+
+def get_airways_between_fixs(airway: str, from_fix: Waypoint, to_fix_name: str) -> list[Airway]:
+    airways = get_all_airways(airway, from_fix)
+    forward_airways = filter_airways_by_from_to(
+        airways, 'F', from_fix, to_fix_name)
+    if forward_airways is not None:
+        return forward_airways
+
+    backward_airways = filter_airways_by_from_to(
+        airways, 'B', from_fix, to_fix_name)
+    if backward_airways is not None:
+        return backward_airways
+
     return []
 
 
 def airways_to_legs(airways: list[Airway]):
-    return [Leg.from_airway(a) for a in airways] + [Leg.from_airway_end(airways[-1])]
+    return [Leg.from_airway(a) for a in airways]
 
 
 # ex. 121.800 -> @21800
@@ -254,7 +292,10 @@ def get_legs_by_route_str(route_str: str):
         airway_name = items.pop(0)
         to_fix_name = items.pop(0)
         new_airways = get_airways_between_fixs(
-            airway_name, legs[-1].fix, to_fix_name)
+            airway_name,
+            legs[-1].fix,
+            to_fix_name
+        )
         new_legs = airways_to_legs(new_airways)
         extended_legs = new_legs[1:]
         legs.extend(extended_legs)

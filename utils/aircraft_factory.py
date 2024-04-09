@@ -1,9 +1,13 @@
 import random
+import logging
 
 from aircrafts.b738 import B738
 from utils.flightplan import Flightplan
 from utils.physics import Speed
+from utils.squawk_code import generate_taipei_fir_squawk_code
 from helpers import fill_position_on_legs, get_start_leg
+
+logger = logging.getLogger(__name__)
 
 airline_icaos = ['CAL', 'EVA', 'SJX', 'CPA', 'FDX']
 flightplans = [
@@ -13,7 +17,10 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='CHALI T3 MKG W6 TNN',
-        cruise_altitude=200,
+        cruise_altitude=20000,
+        aircraft_icao='B738',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     # TODO: support direct to waypoint in route
     # Flightplan(
@@ -30,7 +37,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='OCEAN V3 ENVAR M750 TONGA',
-        cruise_altitude=370,
+        cruise_altitude=37000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RKSI',
@@ -38,7 +49,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='BOPTA Z51 BEDES Y711 MUGUS Y742 SALMI B576 BAKER',
-        cruise_altitude=380,
+        cruise_altitude=38000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RCBS',
@@ -46,7 +61,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='INDIA W6 MKG A1 HLG',
-        cruise_altitude=170,
+        cruise_altitude=17000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RCSS',
@@ -54,7 +73,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='YILAN B591 GI',
-        cruise_altitude=180,
+        cruise_altitude=18000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RCTP',
@@ -62,7 +85,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='MOLKA M750 MOMPA Y451 HKC Y45 OOITA Y351 SALTY Y35 BERTH',
-        cruise_altitude=390,
+        cruise_altitude=39000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RJBB',
@@ -70,7 +97,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='MAIKO Y34 SUKMO Y50 IGMON A1 DRAKE',
-        cruise_altitude=380,
+        cruise_altitude=38000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='RCTP',
@@ -78,7 +109,11 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='ROBIN R583 BORDO',
-        cruise_altitude=330,
+        cruise_altitude=33000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
     Flightplan(
         departure_airport='ROAH',
@@ -86,16 +121,21 @@ flightplans = [
         flight_rules='I',
         cruise_speed=Speed(mph=489),
         route='GANJU Y576 LILRA Y573 SEDKU R595 GRACE',
-        cruise_altitude=320,
+        cruise_altitude=32000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
     ),
-    Flightplan(
-        departure_airport='RCTP',
-        arrival_airport='ZSPD',
-        flight_rules='I',
-        cruise_speed=Speed(mph=489),
-        route=' PIANO L3 VIOLA R596 SULEM DST B221 SHZ W58 BK',
-        cruise_altitude=370,
-    ),
+    # Flightplan(
+    #     departure_airport='RCTP',
+    #     arrival_airport='ZSPD',
+    #     flight_rules='I',
+    #     cruise_speed=Speed(mph=489),
+    #     route='PIANO L3 VIOLA R596 SULEM DST B221 SHZ W58 BK',
+    #     cruise_altitude=37000,
+    #     aircraft_icao='B738',
+    # ),
 ]
 
 
@@ -127,11 +167,19 @@ class AircraftFactory:
         callsign = self.generate_callsign()
 
         try:
-            aircraft = B738(
-                callsign=callsign,
-                flightplan=flightplan,
-                is_on_ground=True
-            )
+            if flightplan.aircraft_icao == 'B738':
+                aircraft = B738(
+                    callsign=callsign,
+                    flightplan=flightplan,
+                    is_on_ground=True,
+                    squawk_code=generate_taipei_fir_squawk_code(
+                        flightplan.departure_airport,
+                        flightplan.arrival_airport,
+                        flightplan.flight_rules
+                    )
+                )
+            else:
+                return
 
             usable_sids = flightplan.get_usable_sids()
             used_sid = random.choice(usable_sids)
@@ -181,5 +229,12 @@ class AircraftFactory:
             return aircraft
 
         except Exception as e:
-            print(flightplan)
+            logger.exception(e)
+            logger.debug(
+                'Error occured on "%s %s %s"' % (
+                    flightplan.departure_airport,
+                    flightplan.route,
+                    flightplan.arrival_airport
+                )
+            )
             return None

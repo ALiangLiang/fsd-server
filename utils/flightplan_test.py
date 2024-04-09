@@ -37,7 +37,6 @@ class TestFlightplan(unittest.TestCase):
             route='CHALI T3 MKG W6 TNN',
             cruise_altitude=200,
         )
-        print(flightplan.get_usable_stars())
         self.assertEqual(len(flightplan.get_usable_stars()), 2)
 
     def test_get_usable_approaches(self):

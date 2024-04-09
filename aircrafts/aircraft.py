@@ -1,4 +1,6 @@
 from datetime import datetime
+from random import randint
+import logging
 
 from geopy.distance import Distance
 
@@ -14,7 +16,9 @@ from helpers import get_displacement_by_seconds, get_fix_by_ident
 from messages.PilotPositionUpdateMessage import PilotPositionUpdateMessage, TransponderMode
 from messages.Position import Position
 
-PRESSURE_DELTA = -1573
+PRESSURE_DELTA = randint(-1500, 1500)
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_flight_level(flight_level: int):
@@ -33,28 +37,6 @@ def combine_legs(*legs_list: list[Leg]):
         elif len(legs_) > 0:
             legs += legs_[1:] if legs[-1].ident == legs_[0].ident else legs_
     return legs
-
-# def combine_legs(
-#     sid_legs: list[Leg],
-#     enroute_legs: list[Leg],
-#     star_legs: list[Leg],
-#     approach_legs: list[Leg]
-# ):
-#     # prevent duplicate leg between legs
-#     legs: list[Leg] = [*sid_legs]
-#     if len(legs) == 0:
-#         legs += enroute_legs
-#     elif len(enroute_legs) > 0:
-#         legs += enroute_legs[1:] if legs[-1].ident == enroute_legs[0].ident else enroute_legs
-#     if len(legs) == 0:
-#         legs += star_legs
-#     elif len(star_legs) > 0:
-#         legs += star_legs[1:] if legs[-1].ident == star_legs[0].ident else star_legs
-#     if len(legs) == 0:
-#         legs += approach_legs
-#     elif len(approach_legs) > 0:
-#         legs += approach_legs[1:] if legs[-1].ident == approach_legs[0].ident else approach_legs
-#     return legs
 
 
 class Aircraft:
@@ -206,12 +188,12 @@ class Aircraft:
         time_diff = now - self._last_send_position_time
         self._last_send_position_time = now
         if self.speed < self.flightplan.cruise_speed:
+            self.speed += self.takeoff_acceleration * time_diff
             distance = get_displacement_by_seconds(
                 self.takeoff_acceleration,
                 time_diff,
                 self.speed
             )
-            self.speed += self.takeoff_acceleration * time_diff
         else:
             self.speed = self.flightplan.cruise_speed
             distance: Distance = self.speed * time_diff
@@ -226,10 +208,10 @@ class Aircraft:
                 roc = Speed(fpm=5000)
             elif self.position.altitude_ < 10000:
                 roc = Speed(fpm=2500)
-            elif self.position.altitude_ < self.flightplan.cruise_altitude:
-                added_altitude = max(
-                    (roc * time_diff),
-                    Distance(feets=self.flightplan.cruise_altitude -
+            if self.position.altitude_ < self.flightplan.cruise_altitude:
+                added_altitude = min(
+                    roc * time_diff,
+                    Distance(feet=self.flightplan.cruise_altitude -
                              self.position.altitude_)
                 )
                 self.position.add_altitude(added_altitude.feet)
@@ -243,10 +225,12 @@ class Aircraft:
         #         await send(client_socket, str(text_message))
         #         is_send_airborne_msg = True
 
-        print('move meters:', distance.meters, ', speed:', self.speed.knots, 'knots,',
-              'altitude:', self.position.altitude_, 'feets,', 'on ground:', self.is_on_ground)
+        logger.debug(
+            f'{self.callsign} - move meters: {distance.meters}, speed: {self.speed.knots}, knots, altitude: {self.position.altitude_}, feets, on ground: {self.is_on_ground}'
+        )
 
-        print('Left legs:', [leg.ident for leg in self.legs])
+        logger.debug(self.callsign + ' - Left legs:' +
+                     ' '.join([leg.ident for leg in self.legs]))
 
         if distance_to_leg < distance:
             self.to_next_leg()
