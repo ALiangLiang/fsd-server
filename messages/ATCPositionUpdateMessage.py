@@ -5,7 +5,7 @@ from messages.Position import Position
 class ATCPositionUpdateMessage(IMessage):
     command = '%'
 
-    def __init__(self, callsign: str, frequency: int, facility: int, visibility: int, rating: int, position: Position):
+    def __init__(self, callsign: str, frequency: str, facility: int, visibility: int, rating: int, position: Position):
         super().__init__()
         self.callsign = callsign
         self.frequency = frequency
@@ -20,7 +20,7 @@ class ATCPositionUpdateMessage(IMessage):
             raw_message[len(cls.command):].split(':')
         position = Position(float(latitude), float(longitude))
         position.altitude_ = elevation
-        return cls(callsign, int(frequency), int(facility), int(visibility), int(rating or 0), position)
+        return cls(callsign, '@' + frequency, int(facility), int(visibility), int(rating or 0), position)
 
     def __str__(self):
         return self.command + ':'.join([

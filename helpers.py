@@ -19,7 +19,7 @@ from db.models import (
     TransitionLeg
 )
 from utils.leg import Leg
-from utils.physics import Acceleration
+from utils.physics import Acceleration, Speed
 
 
 def get_waypoints_by_ident_n_region(ident: str, region: str):
@@ -256,7 +256,11 @@ def frequency_to_abbr(frequency: str):
     return '@' + frequency.replace('.', '')[1:]
 
 
-def get_displacement_by_seconds(acceleration: Acceleration, time: timedelta, initial_speed: float = 0.0) -> Distance:
+def get_displacement_by_seconds(
+    acceleration: Acceleration,
+    time: timedelta,
+    initial_speed: Speed = Speed(0)
+) -> Distance:
     """
     params:
         acceleration: m / s^2

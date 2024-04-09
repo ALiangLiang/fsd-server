@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from random import randint
 import logging
 
@@ -13,8 +13,10 @@ from utils.leg import Leg
 from utils.unit import lbs_to_kg
 from utils.physics import get_acceleration_by_newton_2th, Speed
 from helpers import get_displacement_by_seconds, get_fix_by_ident
+from messages.DeletePilotMessage import DeletePilotMessage
 from messages.PilotPositionUpdateMessage import PilotPositionUpdateMessage, TransponderMode
 from messages.Position import Position
+from messages.TextMessage import TextMessage
 
 PRESSURE_DELTA = randint(-1500, 1500)
 
@@ -115,7 +117,10 @@ class Aircraft:
         self.bank = 0
         self.heading = 0
         self._is_pause = False
-        self._last_send_position_time = datetime.now()
+
+    @property
+    def is_no_more_legs(self):
+        return len(self.legs) == 0
 
     def set_position(self, position: Position):
         self.position = position
@@ -173,8 +178,8 @@ class Aircraft:
     # TODO: shutdown after stoped
     # TODO: adjust roc by leg restriction
     # TODO: support smooth turn
-    def update_status(self):
-        if len(self.legs) == 0:
+    def update_status(self, after_time: timedelta):
+        if self.is_no_more_legs and self.flightplan is None:
             return
 
         bearing, distance_to_leg = get_bearing_distance(
@@ -184,19 +189,16 @@ class Aircraft:
         self.heading = bearing
 
         # updat speed
-        now = datetime.now()
-        time_diff = now - self._last_send_position_time
-        self._last_send_position_time = now
         if self.speed < self.flightplan.cruise_speed:
-            self.speed += self.takeoff_acceleration * time_diff
+            self.speed += self.takeoff_acceleration * after_time
             distance = get_displacement_by_seconds(
                 self.takeoff_acceleration,
-                time_diff,
+                after_time,
                 self.speed
             )
         else:
             self.speed = self.flightplan.cruise_speed
-            distance: Distance = self.speed * time_diff
+            distance: Distance = self.speed * after_time
 
         # update altitude
         if self.speed > self.vr:
@@ -210,7 +212,7 @@ class Aircraft:
                 roc = Speed(fpm=2500)
             if self.position.altitude_ < self.flightplan.cruise_altitude:
                 added_altitude = min(
-                    roc * time_diff,
+                    roc * after_time,
                     Distance(feet=self.flightplan.cruise_altitude -
                              self.position.altitude_)
                 )
@@ -225,12 +227,13 @@ class Aircraft:
         #         await send(client_socket, str(text_message))
         #         is_send_airborne_msg = True
 
-        logger.debug(
-            f'{self.callsign} - move meters: {distance.meters}, speed: {self.speed.knots}, knots, altitude: {self.position.altitude_}, feets, on ground: {self.is_on_ground}'
-        )
+        # logger.debug(
+        #     f'{self.callsign} - move meters: {distance.meters}, speed: {self.speed.knots} knots, ' +
+        #     'altitude: {self.position.altitude_} feets, on ground: {self.is_on_ground}'
+        # )
 
-        logger.debug(self.callsign + ' - Left legs:' +
-                     ' '.join([leg.ident for leg in self.legs]))
+        # logger.debug(self.callsign + ' - Left legs:' +
+        #              ' '.join([leg.ident for leg in self.legs]))
 
         if distance_to_leg < distance:
             self.to_next_leg()
@@ -242,8 +245,6 @@ class Aircraft:
         )
 
     def get_position_update_message(self):
-        self.update_status()
-
         return PilotPositionUpdateMessage(
             callsign=self.callsign,
             ident=self.transponder_mode,
@@ -263,3 +264,9 @@ class Aircraft:
             source=self.callsign,
             destination=destination_callsign,
         )
+
+    def get_delete_message(self):
+        return DeletePilotMessage(self.callsign)
+
+    def get_text_message(self, destination: str, text: str):
+        return TextMessage(self.callsign, destination, text)

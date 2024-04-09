@@ -1,11 +1,13 @@
 import random
 import logging
+from datetime import timedelta
 
 from aircrafts.b738 import B738
 from utils.flightplan import Flightplan
 from utils.physics import Speed
 from utils.squawk_code import generate_taipei_fir_squawk_code
 from helpers import fill_position_on_legs, get_start_leg
+from aircrafts.aircraft import Aircraft
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,54 @@ flightplans = [
         equipment='SDE2E3FGHIRWXY',
         transponder_types='LB1',
     ),
+    Flightplan(
+        departure_airport='RCYU',
+        arrival_airport='RCMQ',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='TINHO B591 WADER J4 HLG W4 GUBAO',
+        cruise_altitude=18000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
+    ),
+    Flightplan(
+        departure_airport='RCTP',
+        arrival_airport='RKSS',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='PIANO L3 SALMI Y743 BOLUT Y741 ATOTI Y722 OLMEN',
+        cruise_altitude=35000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
+    ),
+    # Flightplan(
+    #     departure_airport='RCMQ',
+    #     arrival_airport='RCQC',
+    #     flight_rules='I',
+    #     cruise_speed=Speed(mph=489),
+    #     route='WUCHI A1 SWORD',
+    #     cruise_altitude=8000,
+    #     aircraft_icao='B738',
+    #     wake_turbulence_category='M',
+    #     equipment='SDE2E3FGHIRWXY',
+    #     transponder_types='LB1',
+    # ),
+    Flightplan(
+        departure_airport='RCFN',
+        arrival_airport='RCSS',
+        flight_rules='I',
+        cruise_speed=Speed(mph=489),
+        route='DONNA B591 YILAN',
+        cruise_altitude=17000,
+        aircraft_icao='B738',
+        wake_turbulence_category='M',
+        equipment='SDE2E3FGHIRWXY',
+        transponder_types='LB1',
+    ),
     # Flightplan(
     #     departure_airport='RCTP',
     #     arrival_airport='ZSPD',
@@ -140,8 +190,7 @@ flightplans = [
 
 
 class AircraftFactory:
-    def __init__(self):
-        self.aircrafts = {}
+    aircrafts: dict[str, Aircraft] = {}
 
     def generate_callsign(self):
         def generate_random_callsign():
@@ -224,6 +273,12 @@ class AircraftFactory:
                     flightplan.arrival_airport
                 )
             )
+
+            online_time = random.randint(0, 3600 / 2) * 2
+            for _ in range(0, online_time, 2):
+                if aircraft.is_no_more_legs:
+                    return
+                aircraft.update_status(timedelta(seconds=2))
 
             self.aircrafts[callsign] = aircraft
             return aircraft
