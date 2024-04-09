@@ -1,15 +1,16 @@
 import asyncio
 import threading
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+from random import randint
 
 import db.init
 from messages.AddATCMessage import AddATCMessage
 from messages.ATCPositionUpdateMessage import ATCPositionUpdateMessage
+from messages.ClearedSpeedMessage import ClearedSpeedMessage
 from messages.ClearedWaypointMessage import ClearedWaypointMessage
 from messages.InformationRequestMessage import InformationRequestMessage, InformationCommand
 from messages.InformationReplyMessage import InformationReplyMessage
-from messages.TextMessage import TextMessage
 from utils.aircraft_factory import AircraftFactory
 from utils.leg import Leg
 
@@ -60,11 +61,9 @@ class Client(asyncio.Protocol):
             self.handle_raw_message(raw_message_row)
 
     def find_leg_by_ident(self, legs: list[Leg], ident: str):
-        print('find_leg_by_ident', [l.ident for l in legs], ident)
         for l in legs:
             if l.fix is None:
                 continue
-            print('l.fix', l.fix.ident, ident)
             if l.fix.ident == ident:
                 return l
         return None
@@ -87,7 +86,6 @@ class Client(asyncio.Protocol):
                 raw_message)
             self.callsign = message.callsign
             self.frequency = message.frequency
-            print('message.frequency', message.frequency)
         elif major_command == '$':  # AdministrativeMessage
             minor_command = raw_message[1:3]
             if minor_command == 'CQ':
@@ -130,6 +128,12 @@ class Client(asyncio.Protocol):
                     message.waypoint_name
                 )
                 if found_leg is None:
+                    self.send(
+                        aircraft.get_text_message(
+                            self.frequency,
+                            'Unable, %s not in our route' % message.waypoint_name
+                        )
+                    )
                     return
                 aircraft.direct_to_leg(found_leg)
                 self.send(
@@ -137,6 +141,23 @@ class Client(asyncio.Protocol):
                         self.frequency,
                         'Direct to %s, %s' % (
                             found_leg.ident,
+                            aircraft.callsign
+                        )
+                    )
+                )
+            if minor_command == 'S':
+                message = ClearedSpeedMessage.parse_raw_message(raw_message)
+                aircraft = factory.aircrafts.get(message.pilot)
+                if aircraft is None:
+                    return
+                aircraft.set_speed_limit(message.speed)
+                prefix = 'Reduce' if aircraft.speed > aircraft.speed_limit else 'Increase'
+                self.send(
+                    aircraft.get_text_message(
+                        self.frequency,
+                        '%s speed to %d knots, %s' % (
+                            prefix,
+                            message.speed.knots,
                             aircraft.callsign
                         )
                     )
@@ -159,7 +180,7 @@ actived_clients: dict[str, Client] = {}
 
 
 async def main():
-    def send_all_aircraft_position(after_time: datetime):
+    def send_all_aircraft_position(after_time: timedelta):
         for aircraft in factory.aircrafts.values():
             # arrived
             if aircraft.is_no_more_legs:
@@ -172,6 +193,9 @@ async def main():
             position_update_message = aircraft.get_position_update_message()
             for client in actived_clients.values():
                 client.send(str(position_update_message))
+        # average 200 seconds to generate an new aircraft
+        if randint(0, 100) > 90:
+            factory.generate_w_random_situation()
     t = set_interval(send_all_aircraft_position, 2, datetime.now())
 
     loop = asyncio.get_running_loop()

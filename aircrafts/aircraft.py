@@ -68,6 +68,7 @@ class Aircraft:
         enroute_legs: list[Leg] | None = None,
         star_legs: list[Leg] = [],
         approach_legs: list[Leg] = [],
+        speed_limit: Speed | None = None,
     ):
         if enroute_legs is None:
             if len(sid_legs) == 0:
@@ -107,6 +108,7 @@ class Aircraft:
         self.sid_legs = sid_legs
         self.star_legs = star_legs
         self.approach_legs = approach_legs
+        self.speed_limit = speed_limit
 
         self.takeoff_acceleration = get_acceleration_by_newton_2th(
             lbs_to_kg(self.to1),
@@ -124,6 +126,10 @@ class Aircraft:
 
     def set_position(self, position: Position):
         self.position = position
+        return self
+
+    def set_speed_limit(self, speed_limit: Speed):
+        self.speed_limit = speed_limit
         return self
 
     def set_sid_legs(self, sid_legs: list[Leg]):
@@ -189,7 +195,8 @@ class Aircraft:
         self.heading = bearing
 
         # updat speed
-        if self.speed < self.flightplan.cruise_speed:
+        speed_limit = self.flightplan.cruise_speed if self.speed_limit is None else self.speed_limit
+        if self.speed < speed_limit:
             self.speed += self.takeoff_acceleration * after_time
             distance = get_displacement_by_seconds(
                 self.takeoff_acceleration,
@@ -197,7 +204,7 @@ class Aircraft:
                 self.speed
             )
         else:
-            self.speed = self.flightplan.cruise_speed
+            self.speed = speed_limit
             distance: Distance = self.speed * after_time
 
         # update altitude
