@@ -1,5 +1,7 @@
 import unittest
 
+from utils.distance import Distance
+
 from utils.physics import Speed
 from utils.flightplan import Flightplan
 
@@ -13,7 +15,7 @@ class TestFlightplan(unittest.TestCase):
             flight_rules='I',
             cruise_speed=Speed(mph=489),
             route='CHALI T3 MKG W6 TNN',
-            cruise_altitude=200,
+            cruise_altitude=Distance(feet=200),
         )
 
         self.assertEqual(len(flightplan.get_usable_sids()), 4)
@@ -24,7 +26,7 @@ class TestFlightplan(unittest.TestCase):
             flight_rules='I',
             cruise_speed=Speed(mph=489),
             route='YILAN B591 GI',
-            cruise_altitude=200,
+            cruise_altitude=Distance(feet=200),
         )
         self.assertEqual(len(flightplan.get_usable_sids()), 4)
 
@@ -35,7 +37,7 @@ class TestFlightplan(unittest.TestCase):
             flight_rules='I',
             cruise_speed=Speed(mph=489),
             route='CHALI T3 MKG W6 TNN',
-            cruise_altitude=200,
+            cruise_altitude=Distance(feet=200),
         )
         self.assertEqual(len(flightplan.get_usable_stars()), 2)
 
@@ -46,7 +48,7 @@ class TestFlightplan(unittest.TestCase):
             flight_rules='I',
             cruise_speed=Speed(mph=489),
             route='CHALI T3 MKG W6 TNN',
-            cruise_altitude=200,
+            cruise_altitude=Distance(feet=200),
         )
         usable_stars = flightplan.get_usable_stars()
         used_star = usable_stars[0]

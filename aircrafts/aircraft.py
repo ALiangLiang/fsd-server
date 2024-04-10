@@ -69,6 +69,7 @@ class Aircraft:
         star_legs: list[Leg] = [],
         approach_legs: list[Leg] = [],
         speed_limit: Speed | None = None,
+        target_altitude: Distance | None = None,
     ):
         if enroute_legs is None:
             if len(sid_legs) == 0:
@@ -109,6 +110,7 @@ class Aircraft:
         self.star_legs = star_legs
         self.approach_legs = approach_legs
         self.speed_limit = speed_limit
+        self.target_altitude = target_altitude
 
         self.takeoff_acceleration = get_acceleration_by_newton_2th(
             lbs_to_kg(self.to1),
@@ -130,6 +132,10 @@ class Aircraft:
 
     def set_speed_limit(self, speed_limit: Speed):
         self.speed_limit = speed_limit
+        return self
+
+    def set_target_altitude(self, target_altitude: Distance):
+        self.target_altitude = target_altitude
         return self
 
     def set_sid_legs(self, sid_legs: list[Leg]):
@@ -207,23 +213,48 @@ class Aircraft:
             self.speed = speed_limit
             distance: Distance = self.speed * after_time
 
-        # update altitude
-        if self.speed > self.vr:
+        # if altitude below 10000ft, speed limit to 250 knots
+        if self.position.altitude_ < Distance(feet=10000):
+            self.speed = min(
+                self.speed,
+                Speed(knots=250)
+            )
+
+        if self.is_on_ground is True and self.speed > self.vr:
             # airborne
             self.is_on_ground = False
 
-            roc = self.climb_roc
-            if self.position.altitude_ < 2500:
-                roc = Speed(fpm=5000)
-            elif self.position.altitude_ < 10000:
-                roc = Speed(fpm=2500)
-            if self.position.altitude_ < self.flightplan.cruise_altitude:
-                added_altitude = min(
-                    roc * after_time,
-                    Distance(feet=self.flightplan.cruise_altitude -
-                             self.position.altitude_)
-                )
-                self.position.add_altitude(added_altitude.feet)
+        # update altitude
+        if self.is_on_ground is False:
+            if self.target_altitude is None:
+                # keep cruise altitude
+                roc = self.climb_roc
+                if self.position.altitude_ < Distance(feet=2500):
+                    roc = Speed(fpm=5000)
+                elif self.position.altitude_ < Distance(feet=10000):
+                    roc = Speed(fpm=2500)
+                if self.position.altitude_ < self.flightplan.cruise_altitude:
+                    added_altitude = min(
+                        roc * after_time,
+                        self.flightplan.cruise_altitude - self.position.altitude_
+                    )
+                    self.position.add_altitude(added_altitude)
+            else:
+                # 100ft tolerance
+                if self.position.altitude_ < self.target_altitude - Distance(feet=100):
+                    self.position.add_altitude(
+                        min(
+                            self.climb_roc * after_time,
+                            self.target_altitude - self.position.altitude_
+                        )
+                    )
+                elif self.position.altitude_ > self.target_altitude + Distance(feet=100):
+                    self.position.add_altitude(
+                        min(
+                            self.descent_roc * after_time,
+                            self.position.altitude_ - self.target_altitude
+                        )
+                    )
 
         #     if is_send_airborne_msg == False and self.position.altitude_ > 500:
         #         text_message = TextMessage(

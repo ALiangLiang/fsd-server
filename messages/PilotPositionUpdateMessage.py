@@ -1,5 +1,7 @@
 from enum import Enum
 
+from geopy.distance import Distance
+
 from messages.IMessage import IMessage
 from messages.Position import Position
 from utils.physics import Speed
@@ -21,7 +23,7 @@ class PilotPositionUpdateMessage(IMessage):
         squawk_code: str,
         rating: str,
         position: Position,
-        altitude: float,
+        altitude: Distance,
         speed: Speed,
         pbh: tuple[int, int, int, bool],
         pressure_delta: int
@@ -73,7 +75,7 @@ class PilotPositionUpdateMessage(IMessage):
             self.squawk_code,
             self.rating,
             str(self.position),
-            str(int(self.altitude)),
+            str(int(self.altitude.feet)),
             str(int(self.speed.knots)),
             str(self.tuple_to_pbh()),
             # '4261414408',  # Placeholder for tupleToPBH result, since the conversion logic is commented out

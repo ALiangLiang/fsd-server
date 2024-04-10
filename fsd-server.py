@@ -4,13 +4,17 @@ import logging
 from datetime import datetime, timedelta
 from random import randint
 
+from geopy.distance import Distance
+
 import db.init
 from messages.AddATCMessage import AddATCMessage
 from messages.ATCPositionUpdateMessage import ATCPositionUpdateMessage
+from messages.ClearedFlightlevelMessage import ClearedFlightlevelMessage
 from messages.ClearedSpeedMessage import ClearedSpeedMessage
 from messages.ClearedWaypointMessage import ClearedWaypointMessage
 from messages.InformationRequestMessage import InformationRequestMessage, InformationCommand
 from messages.InformationReplyMessage import InformationReplyMessage
+from messages.TextMessage import TextMessage
 from utils.aircraft_factory import AircraftFactory
 from utils.leg import Leg
 
@@ -41,6 +45,18 @@ class Client(asyncio.Protocol):
             self.transport.write((str(msg) + '\r\n').encode())
         except Exception as err:
             logging.error(err)
+
+    def send_text(self, target: str, msg: str):
+        return self.send(
+            TextMessage(
+                self.callsign,
+                target,
+                msg
+            )
+        )
+
+    def send_text_to_channel(self, msg: str):
+        return self.send_text(self.frequency, msg)
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -151,15 +167,38 @@ class Client(asyncio.Protocol):
                 if aircraft is None:
                     return
                 aircraft.set_speed_limit(message.speed)
-                prefix = 'Reduce' if aircraft.speed > aircraft.speed_limit else 'Increase'
+                action = 'Reduce' if aircraft.speed > aircraft.speed_limit else 'Increase'
+                instrucment = '%s speed to %d knots' % (
+                    action, message.speed.knots)
+                self.send_text_to_channel(
+                    '%s, %s' % (aircraft.callsign, instrucment)
+                )
                 self.send(
                     aircraft.get_text_message(
                         self.frequency,
-                        '%s speed to %d knots, %s' % (
-                            prefix,
-                            message.speed.knots,
-                            aircraft.callsign
-                        )
+                        '%s, %s' % (instrucment, aircraft.callsign)
+                    )
+                )
+            if minor_command == 'F':
+                message = ClearedFlightlevelMessage.parse_raw_message(
+                    raw_message)
+                aircraft = factory.aircrafts.get(message.pilot)
+                if aircraft is None:
+                    return
+                aircraft.set_target_altitude(message.flight_level)
+                target_altitude: Distance = aircraft.target_altitude
+                action = 'Decend' if aircraft.position.altitude_ > target_altitude else 'Climb'
+                altitude_str = f'FL{int(target_altitude.feet // 100)}' if \
+                    target_altitude > Distance(feet=13000) else \
+                    f'{int(target_altitude.feet)}ft'
+                instrucment = '%s and maintain %s' % (action, altitude_str)
+                self.send_text_to_channel(
+                    '%s, %s' % (aircraft.callsign, instrucment)
+                )
+                self.send(
+                    aircraft.get_text_message(
+                        self.frequency,
+                        '%s, %s' % (instrucment, aircraft.callsign)
                     )
                 )
         elif major_command == '!':  # VerificationMessage

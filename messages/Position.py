@@ -1,15 +1,19 @@
 from geopy.point import Point
+from geopy.distance import Distance
 
 
 class Position(Point):
-    def __init__(self, latitude: float, longitude: float, altitude: float | None = None):
+    def __init__(self, latitude: float, longitude: float, altitude: Distance | None = None):
         super().__new__(Position, latitude=latitude, longitude=longitude)
         self.altitude = 0.0
         self.altitude_ = altitude
 
+    def __new__(cls, latitude: float, longitude: float, altitude: Distance | None = None):
+        return super().__new__(cls, latitude, longitude)
+
     @staticmethod
     def from_point(point: Point):
-        return Position(point.latitude, point.longitude, point.altitude)
+        return Position(point.latitude, point.longitude, Distance(feet=point.altitude))
 
     @staticmethod
     def parse_raw_message(raw_message):
@@ -19,17 +23,17 @@ class Position(Point):
         return Position(lat, lng)
 
     def copy(self):
-        return Position(self.latitude, self.longitude, self.altitude)
+        return Position(self.latitude, self.longitude, self.altitude_)
 
     def set_coordinates(self, latitude: float, longitude: float):
         self.latitude = latitude
         self.longitude = longitude
 
-    def add_altitude(self, altitude: float):
+    def add_altitude(self, altitude: Distance):
         self.altitude_ += altitude
         return self
 
-    def set_altitude(self, altitude: float):
+    def set_altitude(self, altitude: Distance):
         self.altitude_ = altitude
         return self
 

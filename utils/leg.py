@@ -1,5 +1,6 @@
-from messages.Position import Position
+from geopy.distance import Distance
 
+from messages.Position import Position
 from db.models import Fix, Airway, RunwayEnd, ProcedureLeg
 
 
@@ -9,7 +10,7 @@ class Leg:
         ident: str,
         laty: float,
         lonx: float,
-        altitude: float | None = None,
+        altitude: Distance | None = None,
         is_missed: bool = False,
         fix: Fix | None = None
     ):
@@ -55,9 +56,13 @@ class Leg:
             ident='RW' + runway_end.name,
             laty=runway_end.laty,
             lonx=runway_end.lonx,
-            altitude=runway_end.altitude
+            altitude=Distance(feet=runway_end.altitude)
         )
 
     @property
     def position(self):
-        return Position(self.laty, self.lonx, self.altitude)
+        return Position(
+            self.laty,
+            self.lonx,
+            self.altitude
+        )

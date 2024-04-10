@@ -1,5 +1,7 @@
 from typing import Literal
 
+from geopy.distance import Distance
+
 from messages.FlightplanMessage import FlightplanMessage
 from messages.Time import Time
 from helpers import (
@@ -20,7 +22,7 @@ class Flightplan:
         flight_rules: str,
         cruise_speed: Speed,
         departure_airport: str,
-        cruise_altitude: int,  # F200 => 200
+        cruise_altitude: Distance,  # F200 => 200
         arrival_airport: str,
         route: str,
         aircraft_icao: str,
@@ -88,7 +90,7 @@ class Flightplan:
             departure_airport=self.departure_airport,
             estimated_departure=self.estimated_departure,
             actual_departure=self.actual_departure,
-            cruise_alt=f"F{str(self.cruise_altitude)[:-2].zfill(3)}",
+            cruise_alt=f"F{str(self.cruise_altitude.feet)[:-2].zfill(3)}",
             arrival_airport=self.arrival_airport,
             hours_en_route=self.hours_en_route,
             minutes_enroute=self.minutes_enroute,
