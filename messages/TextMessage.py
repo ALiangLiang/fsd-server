@@ -12,7 +12,9 @@ class TextMessage(IMessage):
 
     @staticmethod
     def parse_raw_message(raw_message):
-        raise NotImplementedError('Not implemented')
+        source, destination, message = raw_message[len(
+            TextMessage.command):].split(':')
+        return TextMessage(source, destination, message)
 
     def __str__(self):
         return self.command + ":".join([
