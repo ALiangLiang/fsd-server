@@ -14,7 +14,6 @@ class AddATCMessage(IMessage):
         rating: int,
         protocol_version: str = 'B'
     ):
-        super().__init__()
         self.source = source
         self.destination = destination
         self.real_name = real_name

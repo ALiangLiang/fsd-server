@@ -90,7 +90,7 @@ class Flightplan:
             departure_airport=self.departure_airport,
             estimated_departure=self.estimated_departure,
             actual_departure=self.actual_departure,
-            cruise_alt=f"F{str(self.cruise_altitude.feet)[:-2].zfill(3)}",
+            cruise_alt=f"F{str(int(self.cruise_altitude.feet))[:-2].zfill(3)}",
             arrival_airport=self.arrival_airport,
             hours_en_route=self.hours_en_route,
             minutes_enroute=self.minutes_enroute,

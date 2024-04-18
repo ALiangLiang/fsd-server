@@ -5,7 +5,7 @@ from messages.IMessage import IMessage
 
 class InformationCommand(Enum):
     FLIGHTPLAN = 'FP'
-    COM = 'COM'
+    COM = 'C?'
     INFO = 'INF'
     ATIS = 'ATIS'
     NAME = 'RN'

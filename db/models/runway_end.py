@@ -8,6 +8,7 @@ from messages.Position import Position
 
 if TYPE_CHECKING:
     from .runway import Runway
+    from .start import Start
 
 
 class RunwayEnd(Base):
@@ -40,9 +41,9 @@ class RunwayEnd(Base):
     laty = Column(Float, nullable=False)
 
     runway: Mapped['Runway'] = relationship(
-        primaryjoin="Runway.primary_end_id == RunwayEnd.runway_end_id", back_populates='primary_end', uselist=False)
-    # approaches: Mapped["RunwayEnd"] = relationship(
-    #     back_populates="runway_end")
+        primaryjoin='Runway.primary_end_id == RunwayEnd.runway_end_id', back_populates='primary_end', uselist=False)
+    # approaches: Mapped['RunwayEnd'] = relationship(back_populates='runway_end')
+    start: Mapped['Start'] = relationship(back_populates='runway_end')
 
     @ property
     def position(self):

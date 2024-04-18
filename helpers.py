@@ -5,7 +5,7 @@ from geopy.distance import Distance
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import joinedload
 
-from db.init import session
+from db.init import session, msfs_session
 from db.models import (
     Airport,
     Airway,
@@ -16,10 +16,14 @@ from db.models import (
     Vor,
     Ndb,
     Runway,
-    TransitionLeg
+    TransitionLeg,
+    Parking,
+    TaxiPath,
+    Start
 )
 from utils.leg import Leg
 from utils.physics import Acceleration, Speed
+from messages.Position import Position
 
 
 def get_waypoints_by_ident_n_region(ident: str, region: str):
@@ -125,10 +129,26 @@ def get_sid_legs(dep_airport: str, dep_runway: str, sid: str):
     return fill_position_on_legs(approach.approach_legs)
 
 
+def get_sid_approaches_by_airport_ident_n_approach_name(airport_ident: str, approach_name: str) -> list[Approach]:
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).join(Airport).filter(
+        Airport.ident == airport_ident,
+        Approach.fix_ident == approach_name,
+        Approach.suffix == 'D'
+    ).all()
+
+
 def get_sid_approaches_by_airport_ident(airport_ident: str) -> list[Approach]:
     return session.query(Approach).options(joinedload(Approach.approach_legs)).filter(
         Approach.airport_ident == airport_ident,
         Approach.suffix == 'D'
+    ).all()
+
+
+def get_star_approaches_by_airport_ident_n_approach_name(airport_ident: str, approach_name: str) -> list[Approach]:
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).join(Airport).filter(
+        Airport.ident == airport_ident,
+        Approach.fix_ident == approach_name,
+        Approach.suffix == 'A'
     ).all()
 
 
@@ -315,3 +335,119 @@ def get_legs_by_route_str(route_str: str):
     legs.extend(extended_legs)
 
     return legs
+
+
+def get_airport_by_ident(ident: str) -> Airport | None:
+    return msfs_session.query(Airport).filter(Airport.ident == ident).first()
+
+
+def get_parking_by_position(position: Position):
+    return msfs_session.query(Parking).filter(
+        and_(
+            Parking.lonx == position.lonx,
+            Parking.laty == position.laty
+        )
+    ).first()
+
+
+def get_parking_by_airport_n_name_n_number(airport_ident: str, name: str, number: int):
+    airport = get_airport_by_ident(airport_ident)
+    if airport is None:
+        return []
+
+    return msfs_session.query(Parking).filter(
+        and_(
+            Parking.airport_id == airport.airport_id,
+            Parking.name == name,
+            Parking.number == number,
+        )
+    ).first()
+
+
+def get_taxi_path_by_position(position: Position):
+    return msfs_session.query(TaxiPath).filter(
+        or_(
+            and_(TaxiPath.start_lonx == position.longitude,
+                 TaxiPath.start_laty == position.latitude),
+            and_(TaxiPath.end_lonx == position.longitude,
+                 TaxiPath.end_laty == position.latitude)
+        )
+    ).first()
+
+
+def get_taxt_positions_by_airport_ident_n_taxi_path_names(airport_ident: str, taxi_path_names: list[str]):
+    return msfs_session.query(TaxiPath).join(Airport).filter(
+        and_(
+            Airport.ident == airport_ident,
+            TaxiPath.name.in_(taxi_path_names)
+        )
+    ).all()
+
+
+def get_taxt_positions_by_airport_id_n_taxi_path_names(airport_id: int, taxi_path_names: list[str]):
+    return msfs_session.query(TaxiPath).filter(
+        and_(
+            TaxiPath.airport_id == airport_id,
+            TaxiPath.name.in_(taxi_path_names)
+        )
+    ).all()
+
+
+def get_taxt_paths_by_parking_id(parking_id: int):
+    return msfs_session.query(TaxiPath).join(
+        Parking,
+        or_(
+            and_(TaxiPath.start_lonx == Parking.lonx,
+                 TaxiPath.start_laty == Parking.laty),
+            and_(TaxiPath.end_lonx == Parking.lonx,
+                 TaxiPath.end_laty == Parking.laty),
+        )
+    ).filter(
+        Parking.parking_id == parking_id,
+    ).all()
+
+
+def get_taxt_positions_by_parking_name_number_airport(airport_ident: str, name: str, number: int):
+    airport = get_airport_by_ident(airport_ident)
+    if airport is None:
+        return []
+
+    return msfs_session.query(TaxiPath).join(
+        Parking,
+        or_(
+            and_(TaxiPath.start_lonx == Parking.lonx,
+                 TaxiPath.start_laty == Parking.laty),
+            and_(TaxiPath.end_lonx == Parking.lonx,
+                 TaxiPath.end_laty == Parking.laty),
+        )
+    ).filter(
+        and_(
+            TaxiPath.airport_id == airport.airport_id,
+            Parking.airport_id == airport.airport_id,
+            Parking.name == name,
+            Parking.number == number,
+        )
+    ).all()
+
+
+def get_pushback_paths_by_parking_id(parking_id: int):
+    return msfs_session.query(TaxiPath).join(
+        Parking,
+        or_(
+            and_(TaxiPath.start_lonx == Parking.lonx,
+                 TaxiPath.start_laty == Parking.laty),
+            and_(TaxiPath.end_lonx == Parking.lonx,
+                 TaxiPath.end_laty == Parking.laty),
+        )
+    ).filter(
+        and_(
+            Parking.parking_id == parking_id,
+        )
+    ).all()
+
+
+def get_start_by_airport_id_n_runway_name(airport_id: int, runway_name: str):
+    return msfs_session.query(Start).filter(
+        Start.airport_id == airport_id,
+        Start.runway_name == runway_name
+    ).first()

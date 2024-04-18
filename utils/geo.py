@@ -3,6 +3,7 @@ import math
 from geopy.distance import Distance, distance as distance_between
 
 from messages.Position import Position
+from utils.bearing import Bearing
 
 
 def calculate_initial_compass_bearing(start, end):
@@ -23,12 +24,12 @@ def calculate_initial_compass_bearing(start, end):
     initial_bearing = math.degrees(initial_bearing)
     compass_bearing = (initial_bearing + 360) % 360
 
-    return compass_bearing
+    return Bearing(compass_bearing)
 
 
-def fix_radial_distance(position: Position, bearing, distance: Distance):
+def fix_radial_distance(position: Position, bearing: Bearing, distance: Distance):
     dest_point = distance_between(
-        meters=distance.meters).destination(position, bearing=bearing)
+        meters=distance.meters).destination(position, bearing=bearing.degrees)
     return Position.from_point(dest_point)
 
 

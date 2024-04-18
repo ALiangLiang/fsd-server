@@ -9,8 +9,11 @@ from messages.Position import Position
 
 if TYPE_CHECKING:
     from .runway import Runway
+    from .parking import Parking
     from .approach import Approach
     from .ndb import Ndb
+    from .taxi_path import TaxiPath
+    from .start import Start
 
 
 class Airport(Base):
@@ -88,10 +91,14 @@ class Airport(Base):
     lonx = Column(Float, nullable=False)
     laty = Column(Float, nullable=False)
 
-    runways: Mapped[List["Runway"]] = relationship(back_populates="airport")
-    approaches: Mapped[List["Approach"]] = relationship(
-        back_populates="airport")
-    ndb: Mapped[List["Ndb"]] = relationship(back_populates="airport")
+    runways: Mapped[List['Runway']] = relationship(back_populates='airport')
+    taxi_paths: Mapped[List['TaxiPath']] = relationship(
+        back_populates='airport')
+    parkings: Mapped[List['Parking']] = relationship(back_populates='airport')
+    approaches: Mapped[List['Approach']] = relationship(
+        back_populates='airport')
+    ndb: Mapped[List['Ndb']] = relationship(back_populates='airport')
+    starts: Mapped[List['Start']] = relationship(back_populates='airport')
 
     @property
     def position(self):

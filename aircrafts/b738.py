@@ -1,8 +1,8 @@
-from aircrafts.aircraft import Aircraft
+from aircrafts.bot_aircraft import BotAircraft
 from utils.physics import Speed
 
 
-class B738 (Aircraft):
+class B738 (BotAircraft):
     icao_name = 'B738'
     type = 'M'
     mtow = 70530

@@ -39,3 +39,6 @@ class Position(Point):
 
     def __str__(self):
         return f"{self.latitude}:{self.longitude}"
+
+    def __hash__(self):
+        return hash((self.latitude, self.longitude, self.altitude_))

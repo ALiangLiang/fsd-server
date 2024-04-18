@@ -4,7 +4,7 @@ from messages.IMessage import IMessage
 class TextMessage(IMessage):
     command = '#TM'
 
-    def __init__(self, source, destination, message):
+    def __init__(self, source: str, destination: str, message: str):
         super().__init__()
         self.source = source
         self.destination = destination

@@ -26,9 +26,9 @@ class ATCPositionUpdateMessage(IMessage):
         return self.command + ':'.join([
             self.callsign,
             self.frequency,
-            self.facility,
-            self.visibility,
-            self.rating,
+            str(self.facility),
+            str(self.visibility),
+            str(self.rating),
             str(self.position),
-            self.position.altitude_
+            str(self.position.altitude_)
         ])
