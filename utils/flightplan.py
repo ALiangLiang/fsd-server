@@ -19,7 +19,7 @@ from db.models import Approach
 class Flightplan:
     def __init__(
         self,
-        flight_rules: str,
+        flight_rules: Literal['I', 'V', 'Y', 'Z'],
         cruise_speed: Speed,
         departure_airport: str,
         cruise_altitude: Distance,  # F200 => 200
