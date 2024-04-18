@@ -302,14 +302,14 @@ class TrainingController(FsdController):
             # gnd
             self.pushback_approved(target_conn)
             return
-        elif re.search(r'((climb|decend) and maintain|[cd]\/m) (FL\d{3}|\d{3,4})', lower_message) is not None:
+        elif re.search(r'((climb|decend) and maintain|[cd]\/m) (fl\d{3}|\d{3,5})', lower_message) is not None:
             altitude_match = re.search(
-                r'((climb/decend) and maintain|[cd]\/m) (FL\d{3}|\d{3,4})',
+                r'((climb/decend) and maintain|[cd]\/m) (fl\d{3}|\d{3,5})',
                 lower_message
             )
             altitude = altitude_match.group(3)
             altitude = int(
-                altitude[2:]) * 100 if altitude.startswith('FL') else int(altitude)
+                altitude[2:]) * 100 if altitude.startswith('fl') else int(altitude)
             altitude = Distance(feet=altitude)
             self.change_altitude(target_conn, altitude)
             return
