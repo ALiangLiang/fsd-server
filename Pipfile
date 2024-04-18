@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 geopy = "==2.4.1"
 sqlalchemy = "==2.0.29"
+astar = "*"
 
 [dev-packages]
 mypy = "*"
