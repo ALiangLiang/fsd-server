@@ -12,7 +12,7 @@ You need to copy your nav data from x-plane folder first.
 ```sh
 pipenv shell
 pipenv install
-python fsd-server.js
+python training_server.py
 ```
 
 ### Connect the server
