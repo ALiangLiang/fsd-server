@@ -33,3 +33,28 @@ class Parking(Base):
     @property
     def position(self):
         return Position(self.laty, self.lonx)
+
+    @property
+    def type_description(self):
+        return {
+            'INVALID': 'Invalid',
+            'UNKNOWN': 'Unknown',
+            'RGA': 'Ramp GA',
+            'RGAS': 'Ramp GA Small',
+            'RGAM': 'Ramp GA Medium',
+            'RGAL': 'Ramp GA Large',
+            'RE': 'Ramp Extra',
+            'RC': 'Ramp Cargo',
+            'RM': 'Ramp Mil',
+            'RMC': 'Ramp Mil Cargo',
+            'RMCB': 'Ramp Mil Combat',
+            'T': 'Tie down',
+            'H': 'Hangar',
+            'G': 'Small',
+            'GM': 'Medium',
+            'GH': 'Heavy',
+            'GE': 'Extra',
+            'DGA': 'Dock GA',
+            'FUEL': 'Fuel',
+            'V': 'Vehicles',
+        }[self.type]

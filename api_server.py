@@ -1,10 +1,19 @@
+from uuid import uuid1
+
 from pydantic import BaseModel, ConfigDict
 from geopy.distance import Distance
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from training_server import training_server, TrainingController
-from helpers import get_sid_approach_names_by_airport_ident
+from helpers import (
+    get_sid_approach_names_by_airport_ident,
+    get_parkings_by_airport_ident,
+    get_parking_by_parking_id
+)
+from utils.preset_flightplans import b738_config, flightplans
+from utils.flightplan import Flightplan
+from utils.connection import Connection
 
 app = FastAPI()
 
@@ -39,13 +48,42 @@ def get_sids(airport_ident: str):
     return [sid.fix_ident for sid in get_sid_approach_names_by_airport_ident(airport_ident)]
 
 
+def name_or_none(parking_name: str):
+    return None if parking_name == 'NONE' else parking_name
+
+
+@app.get('/airports/{airport_ident}/parkings')
+def get_parkings(airport_ident: str):
+    return [
+        {
+            'id': p.parking_id,
+            'name': (name_or_none(p.name) or '') + str(p.number),
+            'type': p.type_description
+        } for p in get_parkings_by_airport_ident(airport_ident)
+    ]
+
+
+@app.get('/preset-flightplans')
+def get_preset_flightplans():
+    return [{
+        'route': fp.route,
+        'departureAirport': fp.departure_airport,
+        'arrivalAirport': fp.arrival_airport,
+        'cruiseAltitude': int(fp.cruise_altitude.feet),
+    } for fp in flightplans]
+
+
 @app.get('/aircrafts')
 def get_aircrafts():
     connections = [conn for conn in training_server.connections.values()]
     return [{
         'id': conn.id,
         'callsign': conn.aircraft.callsign,
-        'parking': (conn.aircraft.parking.name or '') + str(conn.aircraft.parking.number),
+        'parking': {
+            'id': conn.aircraft.parking.parking_id,
+            'name': (name_or_none(conn.aircraft.parking.name) or '') + str(conn.aircraft.parking.number),
+            'type': conn.aircraft.parking.type_description
+        },
         'altitude': int(conn.aircraft.position.altitude_.feet),
         'squawkCode': conn.aircraft.squawk_code,
         'flightplanRoute': conn.aircraft.flightplan.route,
@@ -59,6 +97,53 @@ def get_aircrafts():
         'targetAltitude': int(conn.aircraft.target_altitude.feet) if conn.aircraft.target_altitude is not None else None,
         'status': conn.aircraft.status
     } for conn in connections if conn.aircraft is not None]
+
+
+class AircraftFlightplan(CamelModel):
+    departure: str
+    route: str
+    arrival: str
+    cruiseAltitude: int
+
+
+class AircraftBody(CamelModel):
+    parkingId: int | None
+    callsign: str | None
+    flightplan: AircraftFlightplan | None
+
+
+@app.post('/aircrafts')
+def create_aircrafts(form: AircraftBody):
+    flightplan = Flightplan(
+        departure_airport=form.flightplan.departure,
+        arrival_airport=form.flightplan.arrival,
+        flight_rules='I',
+        route=form.flightplan.route,
+        cruise_altitude=Distance(feet=form.flightplan.cruiseAltitude),
+        **b738_config
+    ) if form.flightplan is not None else None
+    aircraft = training_server.factory.generate_on_parking(
+        callsign=form.callsign,
+        flightplan=flightplan,
+        parking=None if form.parkingId is None else get_parking_by_parking_id(
+            form.parkingId
+        ),
+    )
+    if aircraft is None:
+        return HTTPException(status_code=400, detail='Invalid flightplan')
+
+    conn = Connection(
+        lambda: None,
+        lambda: None,
+        training_server._on_text_message,
+    )
+    conn.id = str(uuid1())
+    conn.aircraft = aircraft
+    conn.callsign = aircraft.callsign
+    conn.type = 'PILOT'
+    training_server.connections[conn.id] = conn
+
+    return {'id': conn.id, 'callsign': aircraft.callsign}
 
 
 class ClearanceDelivery(CamelModel):

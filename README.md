@@ -12,7 +12,7 @@ You need to copy your nav data from x-plane folder first.
 ```sh
 pipenv shell
 pipenv install
-python training_server.py
+python main.py
 ```
 
 ### Connect the server

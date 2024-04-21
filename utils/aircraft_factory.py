@@ -6,9 +6,11 @@ from geopy.distance import Distance
 
 from aircrafts.b738 import B738
 from utils.squawk_code import generate_taipei_fir_squawk_code
-from utils.flight_plans import flightplans
+from utils.preset_flightplans import flightplans
+from utils.flightplan import Flightplan
+from db.models import Parking
 from helpers import fill_position_on_legs, get_start_leg, get_airport_by_ident
-from aircrafts.bot_aircraft import BotAircraft, TransponderMode
+from aircrafts.bot_aircraft import BotAircraft, TransponderMode, AircraftStatus
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +115,18 @@ class AircraftFactory:
             )
             return None
 
-    def generate_on_parking(self, departure_airport_ident: str | None):
-        candidate_flightplane = [fp for fp in flightplans if fp.departure_airport ==
-                                 departure_airport_ident] if departure_airport_ident is not None else flightplans
-        flightplan = random.choice(candidate_flightplane)
-        callsign = self.generate_callsign()
+    def generate_on_parking(
+        self,
+        departure_airport_ident: str | None = None,
+        callsign: str | None = None,
+        flightplan: Flightplan | None = None,
+        parking: Parking | None = None,
+    ):
+        if flightplan is None:
+            candidate_flightplane = [fp for fp in flightplans if fp.departure_airport ==
+                                    departure_airport_ident] if departure_airport_ident is not None else flightplans
+            flightplan = random.choice(candidate_flightplane)
+        callsign = callsign or self.generate_callsign()
 
         try:
             if flightplan.aircraft_icao == 'B738':
@@ -129,16 +138,34 @@ class AircraftFactory:
                     transponder_mode=TransponderMode.STANDBY
                 )
             else:
-                return
+                raise Exception('The aircraft is not supported')
 
-            airport = get_airport_by_ident(flightplan.departure_airport)
-            if airport is None:
-                return
-            if len(airport.parkings) == 0:
-                logger.error('No parking available at %s' % airport.ident)
-                return
+            candidated_parkings: list[Parking] = []
+            if parking is None:
+                airport = get_airport_by_ident(flightplan.departure_airport)
+                if airport is None:
+                    raise Exception('Airport not found')
+                if len(airport.parkings) == 0:
+                    raise Exception('No parking available at ' + airport.ident)
+                candidated_parkings = airport.parkings
+            else:
+                candidated_parkings = [parking]
+            
 
-            parking = random.choice(airport.parkings)
+            occupied_parking_ids = [
+                ac.parking.parking_id for ac in self.aircrafts.values() \
+                    if (ac.parking is not None) and ac.status in (
+                        AircraftStatus.NOT_DELIVERED,
+                        AircraftStatus.DELIVERED,
+                        AircraftStatus.APPROVED_PUSHBACK_STARTUP
+                    )
+            ]
+            empty_parkings = [
+                p for p in candidated_parkings if p.parking_id not in occupied_parking_ids
+            ]
+            if len(empty_parkings) == 0:
+                raise Exception('No parking available')
+            parking = random.choice(empty_parkings)
             position = parking.position.copy()
             position.set_altitude(
                 Distance(feet=airport.altitude)

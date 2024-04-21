@@ -1,6 +1,6 @@
 <template>
   <el-form :model="form">
-    <el-form-item label="Taxi to">
+    <el-form-item label="Taxi via">
       <el-input v-model="form.taxiTo" autocomplete="off" />
     </el-form-item>
     <el-form-item label="Runway">
@@ -14,6 +14,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, watch, inject } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import { serverKey } from '../injection-keys'
 
@@ -39,18 +40,27 @@ watch(() => props.aircraftId, () => {
 
 const onClickSubmit = async () => {
   isLoading.value = true
-  await fetch(`${server?.value}/aircrafts/${props.aircraftId}/taxi`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      taxiPath: form.taxiTo.split(' '),
-      runwayName: form.runway,
+  try {
+    await fetch(`${server?.value}/aircrafts/${props.aircraftId}/taxi`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        taxiPath: form.taxiTo.split(' '),
+        runwayName: form.runway,
+      })
     })
-  })
-  isLoading.value = false
-  emit('submit', props.aircraftId)
+    emit('submit', props.aircraftId)
+  } catch (err) {
+    console.error(err)
+    ElMessage({
+      message: 'Failed to change altitude',
+      type: 'error'
+    })
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 

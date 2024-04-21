@@ -112,6 +112,8 @@ def get_taxi_path(start_parking: Parking, taxi_path_names: list[str]):
 
 
 class TrainingController(FsdController):
+    frequency = '@18700'
+
     def delivered(
         self,
         target_conn: Connection,
@@ -150,7 +152,7 @@ class TrainingController(FsdController):
         last_route_str = f'{star_name} arrival' if star_name is not None else 'flightplan route'
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Cleared to {aircraft.flightplan.arrival_airport} via {sid_name}, ..., {last_route_str}, '
             f'climb and maintain {int(initial_altitude.feet)}, squawk {squawk}, {target_conn.callsign}'
         )
@@ -165,7 +167,7 @@ class TrainingController(FsdController):
         if len(pushback_paths) == 0:
             self.send_text_to_all_connections(
                 target_conn.callsign,
-                '@26700',
+                self.frequency,
                 f'Unable, {target_conn.callsign}'
             )
             return
@@ -174,7 +176,7 @@ class TrainingController(FsdController):
 
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Startup and pushback approved, {target_conn.callsign}'
         )
         pushback_path = pushback_paths[0]
@@ -193,7 +195,7 @@ class TrainingController(FsdController):
         if path is None:
             self.send_text_to_all_connections(
                 target_conn.callsign,
-                '@26700',
+                self.frequency,
                 f'Unable, {target_conn.callsign}'
             )
             return
@@ -202,7 +204,7 @@ class TrainingController(FsdController):
         taxiway_name_sentence = ' '.join(taxiway_names)
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Runway {runway_name.upper()}, taxi via {taxiway_name_sentence}, {target_conn.callsign}'
         )
         path_positions.pop(0)
@@ -215,14 +217,14 @@ class TrainingController(FsdController):
         if len(aircraft.departure_path) == 0:
             self.send_text_to_all_connections(
                 target_conn.callsign,
-                '@26700',
+                self.frequency,
                 'Unable'
             )
             return
 
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Line-up and wait, runway {runway_name.upper()}, {target_conn.callsign}'
         )
         aircraft.start_lineup_wait()
@@ -244,7 +246,7 @@ class TrainingController(FsdController):
 
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Runway {runway_name.upper()}, wind {wdir} at {wspd} knots, QNH {altim}, cleared for takeoff, {target_conn.callsign}'
         )
         aircraft.start_departure()
@@ -258,7 +260,7 @@ class TrainingController(FsdController):
 
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'{action_str} and maintain {int(altitude.feet)}, {target_conn.callsign}'
         )
         aircraft.set_target_altitude(altitude)
@@ -378,21 +380,24 @@ class TrainingController(FsdController):
         # cannot parse instruction
         self.send_text_to_all_connections(
             target_conn.callsign,
-            '@26700',
+            self.frequency,
             f'Say again, {target_conn.callsign}'
         )
 
 
 def on_pushback_completed(conn: Connection):
     conn.send_text(
-        '@26700',
+        self.frequency,
         f'Pushback completed, {conn.callsign}'
     )
 
 
 class TrainingServer(FsdServer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.factory = AircraftFactory()
+
     def on_start(self):
-        factory = AircraftFactory()
         for _ in range(NUMBER_OF_AIRCRAFTS):
             # factory.generate_w_random_situation(random_progress=True)
             conn = Connection(
@@ -401,7 +406,7 @@ class TrainingServer(FsdServer):
                 self._on_text_message,
             )
             conn.id = str(uuid1())
-            aircraft = factory.generate_on_parking('RCTP')
+            aircraft = self.factory.generate_on_parking('RCTP')
             if aircraft is None:
                 continue
 

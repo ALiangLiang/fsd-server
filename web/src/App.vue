@@ -1,11 +1,17 @@
 <template>
-  <el-space direction="vertical">
+  <el-space direction="vertical" style="width: 100%">
     <el-row :gutter="4">
       <el-col :span="12">Server Link:<el-input v-model="server" autocomplete="off" /></el-col>
       <el-col :span="6">Airport ICAO:<el-input v-model="airportIdent" autocomplete="off" /></el-col>
     </el-row>
     <el-row :gutter="4">
-      Filter:<el-input v-model="callsignFilter" autocomplete="off" />
+      <el-col :span="12">
+        <span>Filter:</span>
+        <el-input v-model="callsignFilter" autocomplete="off" />
+      </el-col>
+      <el-col :span="12">
+        <el-button @click="onClickCreate">Create Aircraft</el-button>
+      </el-col>
     </el-row>
   </el-space>
 
@@ -24,7 +30,7 @@
 
   <el-table :data="filteredAircrafts" style="width: 100%">
     <el-table-column label="Callsign" prop="callsign" :width="80" />
-    <el-table-column label="Parking" prop="parking" :width="80" />
+    <el-table-column label="Parking" prop="parking.name" :width="80" />
     <el-table-column label="Squawk" prop="squawkCode" :width="80" />
     <el-table-column label="Route" prop="flightplan.route" />
     <el-table-column label="Arrival" prop="flightplan.arrivalAirport" />
@@ -50,7 +56,7 @@
           :type="(aircraft.status === AircraftStatus.APPROVED_PUSHBACK_STARTUP) ? 'primary' : 'default'"
           @click="() => onClickTaxiTo(aircraft)"
         >
-          Taxi to...
+          Taxi via...
         </el-button>
         <el-button
           :type="(aircraft.status === AircraftStatus.APPROVED_TAXI) ? 'primary' : 'default'"
@@ -75,9 +81,13 @@
   </el-table>
   
   <el-dialog v-model="isShowDialog" title="Form" width="400">
+    <CreateAircraftForm 
+      v-if="Form.__name === CreateAircraftForm.__name"
+      @submit="onSubmit" 
+    />
     <component 
       :is="Form"
-      v-if="selectedAircraft" 
+      v-else-if="selectedAircraft !== null"
       :aircraft-id="selectedAircraft.id"
       @submit="onSubmit" 
     />
@@ -87,29 +97,23 @@
 <script setup lang="ts">
 import { ref, provide, computed, watch, onMounted } from 'vue'
 
-import { serverKey, airportIdentKey, sidNamesKey } from './injection-keys'
+import {
+  serverKey,
+  airportIdentKey,
+  aircraftsKey,
+  sidNamesKey,
+  parkingsKey,
+  presetFlightplansKey ,
+  type extractInjectionKey,
+} from './injection-keys'
+import CreateAircraftForm from './components/CreateAircraftForm.vue'
 import ClearanceDeliveryForm from './components/ClearanceDeliveryForm.vue'
 import TaxiToForm from './components/TaxiToForm.vue'
 import LineupAndWaitForm from './components/LineupAndWaitForm.vue'
 import ClearedTakeoffForm from './components/ClearedTakeoffForm.vue'
 import ChangeAltitudeForm from './components/ChangeAltitudeForm.vue'
+import { AircraftStatus, type Aircraft } from './types'
 
-interface Aircraft {
-  id: string
-  callsign: string
-  parking: string
-  status: AircraftStatus
-  squawkCode: string
-}
-
-enum AircraftStatus {
-  NOT_DELIVERED = 0,
-  DELIVERED = 1,
-  APPROVED_PUSHBACK_STARTUP = 2,
-  APPROVED_TAXI = 3,
-  LINEUP_WAIT = 4,
-  CLEARED_TAKEOFF = 5,
-}
 const AircraftStatusMap = {
   [AircraftStatus.NOT_DELIVERED]: 'Not Delivered',
   [AircraftStatus.DELIVERED]: 'Clearance Delivery',
@@ -126,7 +130,9 @@ const callsignFilter = ref('')
 const server = ref('http://localhost:8000')
 const airportIdent = ref('')
 const sidNames = ref<string[]>([])
+const parkings = ref([]) as extractInjectionKey<typeof parkingsKey>
 const aircrafts = ref<Aircraft[]>([])
+const presetFlightplans = ref([]) as extractInjectionKey<typeof presetFlightplansKey>
 const selectedAircraft = ref<Aircraft | null>(null)
 const activeStatus = ref(-1)
 const Form = ref(ClearanceDeliveryForm)
@@ -140,7 +146,10 @@ const filteredAircrafts = computed(() =>
 
 provide(serverKey, server)
 provide(airportIdentKey, airportIdent)
+provide(aircraftsKey, aircrafts)
 provide(sidNamesKey, sidNames)
+provide(parkingsKey, parkings)
+provide(presetFlightplansKey, presetFlightplans)
 
 watch([server, airportIdent], () => {
   localStorage.setItem('server', server.value)
@@ -151,6 +160,12 @@ async function updateAircraft () {
   return fetch(`${server.value}/aircrafts`)
     .then((response) => response.json())
     .then((json: Aircraft[]) => (aircrafts.value = json))
+}
+
+const onClickCreate = () => {
+  Form.value = CreateAircraftForm
+  selectedAircraft.value = null
+  isShowDialog.value = true
 }
 
 const onSubmit = async (aircraftId: string) => {
@@ -211,6 +226,12 @@ onMounted(() => {
   fetch(`${server.value}/airports/${airportIdent.value}/sids`)
     .then((response) => response.json())
     .then((json) => (sidNames.value = json))
+  fetch(`${server.value}/airports/${airportIdent.value}/parkings`)
+    .then((response) => response.json())
+    .then((json) => (parkings.value = json))
+  fetch(`${server.value}/preset-flightplans`)
+    .then((response) => response.json())
+    .then((json) => (presetFlightplans.value = json))
 })
 </script>
 

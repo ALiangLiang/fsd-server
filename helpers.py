@@ -348,12 +348,24 @@ def get_airport_by_ident(ident: str) -> Airport | None:
     return msfs_session.query(Airport).filter(Airport.ident == ident).first()
 
 
+def get_parkings_by_airport_ident(airport_ident: str) -> list[Approach]:
+    return msfs_session.query(Parking).join(Airport).filter(
+        Airport.ident == airport_ident,
+    ).all()
+
+
 def get_parking_by_position(position: Position):
     return msfs_session.query(Parking).filter(
         and_(
             Parking.lonx == position.lonx,
             Parking.laty == position.laty
         )
+    ).first()
+
+
+def get_parking_by_parking_id(parking_id: int):
+    return msfs_session.query(Parking).filter(
+        Parking.parking_id == parking_id,
     ).first()
 
 

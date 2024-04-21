@@ -37,6 +37,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, watch, inject } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import { serverKey, sidNamesKey } from '../injection-keys'
 
@@ -64,15 +65,24 @@ watch(() => props.aircraftId, () => {
 
 const onClickSubmit = async () => {
   isLoading.value = true
-  await fetch(`${server?.value}/aircrafts/${props.aircraftId}/clearance-delivery`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(form)
-  })
-  isLoading.value = false
-  emit('submit', props.aircraftId)
+  try{
+    await fetch(`${server?.value}/aircrafts/${props.aircraftId}/clearance-delivery`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(form)
+    })
+    emit('submit', props.aircraftId)
+  } catch (err) {
+    console.error(err)
+    ElMessage({
+      message: 'Failed to change altitude',
+      type: 'error'
+    })
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
