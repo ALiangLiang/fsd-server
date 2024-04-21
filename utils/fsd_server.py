@@ -47,7 +47,7 @@ class FsdServer:
     def _on_lost_connection(self, connection: Connection):
         self.connections.pop(connection.id)
 
-    async def start(self):
+    async def serve(self):
         print(f"FSD Server started at {self.host}:{self.port}")
         loop = asyncio.get_running_loop()
         self._tcp_server = await loop.create_server(

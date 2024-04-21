@@ -6,7 +6,12 @@ name = "pypi"
 [packages]
 geopy = "==2.4.1"
 sqlalchemy = "==2.0.29"
-astar = "*"
+astar = "==0.99"
+flask = "==3.0.3"
+uvicorn = "==0.29.0"
+fastapi = "*"
+pydantic = "*"
+requests = "*"
 
 [dev-packages]
 mypy = "*"

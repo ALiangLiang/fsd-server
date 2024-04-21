@@ -151,6 +151,10 @@ class BotAircraft(Aircraft):
         self.position = position
         return self
 
+    def set_status(self, status: AircraftStatus):
+        self.status = status
+        return self
+
     def start_pushback(self, pushback_path: list[Position] | None = None):
         if pushback_path is not None:
             self.pushback_path = pushback_path

@@ -1,14 +1,14 @@
 import re
-import asyncio
 import logging
 from uuid import uuid1
 
+import requests
 import astar
 from geopy.distance import distance as distance_between, Distance
 
 import db.init
 from db.models import TaxiPath, Parking
-from aircrafts.bot_aircraft import BotAircraft
+from aircrafts.bot_aircraft import BotAircraft, AircraftStatus
 from utils.fsd_server import FsdServer
 from utils.aircraft_factory import AircraftFactory
 from utils.connection import Connection
@@ -145,6 +145,7 @@ class TrainingController(FsdController):
         aircraft.set_squawk(squawk)
         aircraft.set_transponder_mode_c()
         aircraft.set_target_altitude(initial_altitude)
+        aircraft.set_status(AircraftStatus.DELIVERED)
 
         last_route_str = f'{star_name} arrival' if star_name is not None else 'flightplan route'
         self.send_text_to_all_connections(
@@ -226,15 +227,25 @@ class TrainingController(FsdController):
         )
         aircraft.start_lineup_wait()
 
-    def cleared_takeoff(self, target_conn: Connection, runway_name: str, qnh: str):
+    def cleared_takeoff(self, target_conn: Connection, runway_name: str):
         aircraft = target_conn.aircraft
         if aircraft is None or not isinstance(aircraft, BotAircraft) or target_conn.callsign is None:
             return
 
+        url = (
+            'https://aviationweather.gov/api/data/metar'
+            f'?ids={target_conn.aircraft.flightplan.departure_airport}&format=json'
+        )
+        response = requests.get(url)
+        airport_data = response.json()[0]
+        wdir = airport_data['wdir']
+        wspd = airport_data['wspd']
+        altim = airport_data['altim']
+
         self.send_text_to_all_connections(
             target_conn.callsign,
             '@26700',
-            f'Runway {runway_name.upper()}, QNH {qnh}, cleared for takeoff, {target_conn.callsign}'
+            f'Runway {runway_name.upper()}, wind {wdir} at {wspd} knots, QNH {altim}, cleared for takeoff, {target_conn.callsign}'
         )
         aircraft.start_departure()
 
@@ -340,11 +351,9 @@ class TrainingController(FsdController):
                 )
                 return
             elif re.search(r'(clear(ed)?|clrd?) (to |for )?(takeoff|t\/o)', lower_message) is not None:
-                qnh_match = re.search(r'qnh ?(\d{4})', lower_message)
                 self.cleared_takeoff(
                     target_conn,
                     runway_name,
-                    qnh_match.group(1)
                 )
                 return
 
@@ -391,6 +400,7 @@ class TrainingServer(FsdServer):
                 lambda: None,
                 self._on_text_message,
             )
+            conn.id = str(uuid1())
             aircraft = factory.generate_on_parking('RCTP')
             if aircraft is None:
                 continue
@@ -399,7 +409,7 @@ class TrainingServer(FsdServer):
             conn.aircraft = aircraft
             conn.callsign = conn.aircraft.callsign
             conn.type = 'PILOT'
-            self.connections[str(uuid1())] = conn
+            self.connections[conn.id] = conn
 
     def on_tick(self):
         pass
@@ -420,12 +430,7 @@ class TrainingServer(FsdServer):
         pass
 
 
-async def main():
-    server = TrainingServer(
-        '0.0.0.0',
-        Controller=TrainingController
-    )
-    await server.start()
-
-if __name__ == '__main__':
-    asyncio.run(main())
+training_server = TrainingServer(
+    '0.0.0.0',
+    Controller=TrainingController
+)

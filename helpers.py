@@ -129,6 +129,13 @@ def get_sid_legs(dep_airport: str, dep_runway: str, sid: str):
     return fill_position_on_legs(approach.approach_legs)
 
 
+def get_sid_approach_names_by_airport_ident(airport_ident: str) -> list[Approach]:
+    return session.query(Approach).options(joinedload(Approach.approach_legs)).join(Airport).filter(
+        Airport.ident == airport_ident,
+        Approach.suffix == 'D'
+    ).all()
+
+
 def get_sid_approaches_by_airport_ident_n_approach_name(airport_ident: str, approach_name: str) -> list[Approach]:
     return session.query(Approach).options(joinedload(Approach.approach_legs)).join(Airport).filter(
         Airport.ident == airport_ident,
