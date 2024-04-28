@@ -252,14 +252,6 @@ class AircraftFactory:
             aircraft.set_speed(Speed(knots=200))
             aircraft.set_status(AircraftStatus.CLEARED_TAKEOFF)
             aircraft.set_transponder_mode_c()
-            for leg in aircraft.legs:
-                if leg.max_altitude_limit is not None:
-                    aircraft.set_target_altitude(leg.max_altitude_limit)
-                    break
-            for leg in aircraft.legs:
-                if leg.speed_limit is not None:
-                    aircraft.set_speed_limit(leg.speed_limit)
-                    break
 
             # online_time = 380
             # for _ in range(0, online_time, 2):

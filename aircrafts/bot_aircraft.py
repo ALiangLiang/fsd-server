@@ -386,6 +386,15 @@ class BotAircraft(Aircraft):
 
         target_leg = self.legs[0] if len(self.legs) > 0 else None
 
+        # update limits
+        if target_leg is not None:
+            if target_leg.max_altitude_limit is not None and self.position.altitude_ > target_leg.max_altitude_limit:
+                self.set_target_altitude(target_leg.max_altitude_limit)
+            if target_leg.min_altitude_limit is not None and self.position.altitude_ < target_leg.min_altitude_limit:
+                self.set_target_altitude(target_leg.min_altitude_limit)
+            if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
+                self.set_speed_limit(target_leg.speed_limit)
+
         bearing, distance_to_leg = self.heading, Distance(nautical=999999)
         if target_leg is not None:
             bearing, distance_to_leg = get_bearing_distance(
@@ -520,6 +529,16 @@ class BotAircraft(Aircraft):
                 )
 
         if distance_to_leg < distance:
+            if target_leg.max_altitude_limit is not None or target_leg.min_altitude_limit is not None:
+                altitude = self.position.altitude_
+                self.position.set_altitude(
+                    max(
+                        target_leg.min_altitude_limit or 0,
+                        min(altitude, target_leg.max_altitude_limit or 999999)
+                    )
+                )
+            if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
+                self.set_speed(target_leg.speed_limit)
             self.to_next_leg()
 
         new_position = fix_radial_distance(self.position, bearing, distance)
