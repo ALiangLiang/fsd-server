@@ -15,3 +15,4 @@ export const parkingsKey = Symbol('parkings-injection-key') as InjectionKey<
 export const presetFlightplansKey = Symbol('preset-flightplans-injection-key') as InjectionKey<
   Ref<Flightplan[]>
 >
+export const createWIntervalIdKey = Symbol('create-with-interval-id-injection-key') as InjectionKey<Ref<number>>

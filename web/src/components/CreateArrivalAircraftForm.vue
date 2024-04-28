@@ -21,13 +21,32 @@
         />
       </el-select>
     </el-form-item>
+    <el-form-item label="Interval (seconds)">
+      <el-input-number v-model="form.seconds" autocomplete="off" />
+    </el-form-item>
     <el-form-item>
       <el-button 
         type="primary" 
         :loading="isLoading"
         @click="onClickSubmit"
       >
-        Submit
+        Create One
+      </el-button>
+      <el-button 
+        v-if="createWIntervalId == -1"
+        type="primary" 
+        :loading="isLoading"
+        @click="onClickCreateWithInterval"
+      >
+        Create every {{ form.seconds }} seconds
+      </el-button>
+      <el-button 
+        v-else
+        type="danger" 
+        :loading="isLoading"
+        @click="onClickStopCreateWithInterval"
+      >
+        Stop create every {{ form.seconds }} seconds
       </el-button>
     </el-form-item>
   </el-form>
@@ -37,7 +56,7 @@
 import { reactive, ref, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { serverKey, airportIdentKey, approachesKey } from '../injection-keys'
+import { serverKey, airportIdentKey, approachesKey, createWIntervalIdKey } from '../injection-keys'
 
 const emit = defineEmits<{
   submit: [aircraftId: string]
@@ -46,14 +65,16 @@ const emit = defineEmits<{
 const server = inject(serverKey)!
 const airportIdent = inject(airportIdentKey)!
 const approaches = inject(approachesKey)!
+const createWIntervalId = inject(createWIntervalIdKey)!
 
 const isLoading = ref(false)
 const form = reactive({
   callsign: '',
   approachId: null,
+  seconds: 300,
 })
 
-const onClickSubmit = async () => {
+const onClickSubmit = async (approachId?: number | null) => {
   isLoading.value = true
   try {
     const resp = await fetch(`${server?.value}/aircrafts`, {
@@ -64,7 +85,7 @@ const onClickSubmit = async () => {
       body: JSON.stringify({
         intention: 'arrival',
         callsign: (form.callsign) ? form.callsign.toUpperCase() : null,
-        approachId: form.approachId,
+        approachId: approachId || form.approachId,
         flightplan: null,
         arrival_airport: airportIdent.value,
       })
@@ -84,6 +105,15 @@ const onClickSubmit = async () => {
   } finally {
     isLoading.value = false
   }
+}
+const onClickCreateWithInterval = () => {
+  clearInterval(createWIntervalId.value)
+  onClickSubmit(form.approachId)
+  createWIntervalId.value = setInterval(() => onClickSubmit(form.approachId), form.seconds * 1000)
+}
+const onClickStopCreateWithInterval = () => {
+  clearInterval(createWIntervalId.value)
+  createWIntervalId.value = -1
 }
 </script>
 

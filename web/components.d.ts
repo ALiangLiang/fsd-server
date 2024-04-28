@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AircraftActions: typeof import('./src/components/AircraftActions.vue')['default']
     ChangeAltitudeForm: typeof import('./src/components/ChangeAltitudeForm.vue')['default']
     ClearanceDeliveryForm: typeof import('./src/components/ClearanceDeliveryForm.vue')['default']
     ClearedLandForm: typeof import('./src/components/ClearedLandForm.vue')['default']
@@ -37,6 +38,7 @@ declare module 'vue' {
     ElTabs: typeof import('element-plus/es')['ElTabs']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     LineupAndWaitForm: typeof import('./src/components/LineupAndWaitForm.vue')['default']
+    Row: typeof import('./src/components/Row.vue')['default']
     Taxi2BayForm: typeof import('./src/components/Taxi2BayForm.vue')['default']
     TaxiToForm: typeof import('./src/components/TaxiToForm.vue')['default']
   }
