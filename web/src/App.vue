@@ -41,62 +41,7 @@
     <el-table-column label="Status" prop="status" :formatter="getAirCraftStatus" />
     <el-table-column align="right">
       <template #default="{ row: aircraft }">
-        <el-button
-          :type="(aircraft.status === AircraftStatus.NOT_DELIVERED) ? 'primary' : 'default'"
-          @click="() => onClickClearanceDelivery(aircraft)"
-        >
-          Clearance Delivery
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.DELIVERED) ? 'primary' : 'default'"
-          :loading="isLoadingPushbackApproved"
-          @click="() => onClickPushbackApproved(aircraft)"
-        >
-          S/U & Pushback approved
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.APPROVED_PUSHBACK_STARTUP) ? 'primary' : 'default'"
-          @click="() => onClickTaxiTo(aircraft)"
-        >
-          Taxi via...
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.APPROVED_TAXI_TO_RWY) ? 'primary' : 'default'"
-          @click="() => onClickLineupAndWait(aircraft)"
-        >
-          Line-up and Wait
-        </el-button>
-        <el-button
-          :type="([AircraftStatus.APPROVED_TAXI_TO_RWY, AircraftStatus.LINEUP_WAIT].includes(aircraft.status)) ? 'primary' : 'default'"
-          @click="() => onClickClearedForTakeoff(aircraft)"
-        >
-          Cleared for Takeoff
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF) ? 'primary' : 'default'"
-          @click="() => onClickClimbDecendMaintain(aircraft)"
-        >
-          Climb/Decend and Maintain
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF) ? 'primary' : 'default'"
-          @click="() => onClickClearedToLand(aircraft)"
-        >
-          Cleared to Land
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.VACATE_RUNWAY) ? 'primary' : 'default'"
-          @click="() => onClickTaxi2Bay(aircraft)"
-        >
-          Taxi to Bay
-        </el-button>
-        <el-button
-          :type="(aircraft.status === AircraftStatus.APPROVED_TAXI_TO_BAY) ? 'primary' : 'default'"
-          :loading="isLoadingShutdown"
-          @click="() => onClickShutdown(aircraft)"
-        >
-          Shutdown
-        </el-button>
+        <aircraft-actions :aircraft="aircraft" @update-aircraft="onUpdateAircraft" />
       </template>
     </el-table-column>
   </el-table>
@@ -104,17 +49,11 @@
   <el-dialog v-model="isShowDialog" title="Form" width="400">
     <CreateAircraftForm 
       v-if="Form.__name === CreateAircraftForm.__name"
-      @submit="onSubmit" 
+      @submit="onUpdateAircraft" 
     />
     <CreateArrivalAircraftForm 
       v-else-if="Form.__name === CreateArrivalAircraftForm.__name"
-      @submit="onSubmit" 
-    />
-    <component 
-      :is="Form"
-      v-else-if="selectedAircraft !== null"
-      :aircraft-id="selectedAircraft.id"
-      @submit="onSubmit" 
+      @submit="onUpdateAircraft" 
     />
   </el-dialog>
 </template>
@@ -129,15 +68,12 @@ import {
   sidNamesKey,
   approachesKey,
   parkingsKey,
-  presetFlightplansKey ,
+  presetFlightplansKey,
+  createWIntervalIdKey,
   type extractInjectionKey,
 } from './injection-keys'
 import CreateAircraftForm from './components/CreateAircraftForm.vue'
 import CreateArrivalAircraftForm from './components/CreateArrivalAircraftForm.vue'
-import ClearanceDeliveryForm from './components/ClearanceDeliveryForm.vue'
-import TaxiToForm from './components/TaxiToForm.vue'
-import ChangeAltitudeForm from './components/ChangeAltitudeForm.vue'
-import Taxi2BayForm from './components/Taxi2BayForm.vue'
 import { AircraftStatus, type Aircraft, type Approach } from './types'
 
 const AircraftStatusMap = {
@@ -156,8 +92,7 @@ const getAirCraftStatus = (row: Aircraft) => AircraftStatusMap[row.status]
 
 const intervalId = ref(-1)
 const isShowDialog = ref(false)
-const isLoadingPushbackApproved = ref(false)
-const isLoadingShutdown = ref(false)
+const createWIntervalId = ref(-1)
 const callsignFilter = ref('')
 const server = ref('http://localhost:8000')
 const airportIdent = ref('')
@@ -168,7 +103,7 @@ const aircrafts = ref<Aircraft[]>([])
 const presetFlightplans = ref([]) as extractInjectionKey<typeof presetFlightplansKey>
 const selectedAircraft = ref<Aircraft | null>(null)
 const activeStatus = ref(-1)
-const Form = ref(ClearanceDeliveryForm)
+const Form = ref(CreateAircraftForm)
 
 const filteredAircrafts = computed(() =>
   aircrafts.value.filter((aircraft) => {
@@ -184,6 +119,7 @@ provide(sidNamesKey, sidNames)
 provide(approachesKey, approaches)
 provide(parkingsKey, parkings)
 provide(presetFlightplansKey, presetFlightplans)
+provide(createWIntervalIdKey, createWIntervalId)
 
 watch([server, airportIdent], () => {
   localStorage.setItem('server', server.value)
@@ -208,87 +144,13 @@ const onClickCreateInbound = () => {
   isShowDialog.value = true
 }
 
-const onSubmit = async (aircraftId: string) => {
-  isShowDialog.value = false
+const onUpdateAircraft = async (aircraftId: string) => {
   const aircrafts = await updateAircraft()
   if (activeStatus.value === -1) return
 
   const aircraft = aircrafts.find((aircraft) => aircraft.id === aircraftId)
   if (aircraft === undefined) return
   activeStatus.value = aircraft.status
-}
-
-const onClickClearanceDelivery = async (aircraft: Aircraft) => {
-  Form.value = ClearanceDeliveryForm
-  selectedAircraft.value = aircraft
-  isShowDialog.value = true
-}
-const onClickPushbackApproved = async (aircraft: Aircraft) => {
-  isLoadingPushbackApproved.value = true
-  await fetch(`${server.value}/aircrafts/${aircraft.id}/startup-pushback-approved`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-  isLoadingPushbackApproved.value = false
-  await updateAircraft()
-}
-const onClickTaxiTo = async (aircraft: Aircraft) => {
-  Form.value = TaxiToForm
-  selectedAircraft.value = aircraft
-  isShowDialog.value = true
-}
-const onClickLineupAndWait = async (aircraft: Aircraft) => {
-  await fetch(`${server.value}/aircrafts/${aircraft.id}/lineup-and-wait`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({})
-  })
-}
-const onClickClearedForTakeoff = async (aircraft: Aircraft) => {
-  await fetch(`${server.value}/aircrafts/${aircraft.id}/cleared-takeoff`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({})
-  })
-}
-const onClickClimbDecendMaintain = async (aircraft: Aircraft) => {
-  Form.value = ChangeAltitudeForm
-  selectedAircraft.value = aircraft
-  isShowDialog.value = true
-}
-const onClickClearedToLand = async (aircraft: Aircraft) => {
-  await fetch(`${server.value}/aircrafts/${aircraft.id}/cleared-land`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      vacatedTaxiway: null,
-    })
-  })
-  await updateAircraft()
-}
-const onClickTaxi2Bay = async (aircraft: Aircraft) => {
-  Form.value = Taxi2BayForm
-  selectedAircraft.value = aircraft
-  isShowDialog.value = true
-}
-const onClickShutdown = async (aircraft: Aircraft) => {
-  isLoadingShutdown.value = true
-  await fetch(`${server.value}/aircrafts/${aircraft.id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-  isLoadingShutdown.value = false
-  await updateAircraft()
 }
 
 onMounted(() => {
