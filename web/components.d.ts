@@ -9,9 +9,12 @@ declare module 'vue' {
   export interface GlobalComponents {
     ChangeAltitudeForm: typeof import('./src/components/ChangeAltitudeForm.vue')['default']
     ClearanceDeliveryForm: typeof import('./src/components/ClearanceDeliveryForm.vue')['default']
+    ClearedLandForm: typeof import('./src/components/ClearedLandForm.vue')['default']
     ClearedTakeoffForm: typeof import('./src/components/ClearedTakeoffForm.vue')['default']
-    copy: typeof import('./src/components/TaxiToForm copy.vue')['default']
+    copy: typeof import('./src/components/CreateAircraftForm copy.vue')['default']
     CreateAircraftForm: typeof import('./src/components/CreateAircraftForm.vue')['default']
+    CreateArriavalAircraftForm: typeof import('./src/components/CreateArriavalAircraftForm.vue')['default']
+    CreateArrivalAircraftForm: typeof import('./src/components/CreateArrivalAircraftForm.vue')['default']
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCol: typeof import('element-plus/es')['ElCol']
@@ -34,6 +37,7 @@ declare module 'vue' {
     ElTabs: typeof import('element-plus/es')['ElTabs']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     LineupAndWaitForm: typeof import('./src/components/LineupAndWaitForm.vue')['default']
+    Taxi2BayForm: typeof import('./src/components/Taxi2BayForm.vue')['default']
     TaxiToForm: typeof import('./src/components/TaxiToForm.vue')['default']
   }
 }

@@ -1,42 +1,7 @@
 <template>
   <el-form :model="form">
-    <el-form-item label="Callsign">
-      <el-input v-model="form.callsign" autocomplete="off" placeholder="Leave blank for random" />
-    </el-form-item>
-    <el-form-item label="Arrival" required>
-      <el-input v-model="form.arrival" autocomplete="off" placeholder="Leave blank for random" />
-    </el-form-item>
-    <el-form-item label="Preset Flightplan" v-if="matchedPresets.length">
-      <el-select
-        filterable
-        remote
-        reserve-keyword
-        remote-show-suffix
-        style="width: 240px"
-        @change="(e: Flightplan) => {
-          form.route = e.route
-          form.cruiseAltitude = e.cruiseAltitude
-        }"
-        placeholder="You can select a preset flightplan"
-      >
-        <el-option
-          v-for="flightplan in matchedPresets"
-          :key="flightplan.route"
-          :label="flightplan.route"
-          :value="flightplan"
-        />
-      </el-select>
-    </el-form-item>
-    <el-form-item label="Route" required>
-      <el-input v-model="form.route" autocomplete="off" />
-    </el-form-item>
-    <el-form-item label="Cruise Altitude" required>
-      <el-input-number 
-        v-model="form.cruiseAltitude"
-        :min="0" 
-        :max="50000"
-        :step="1000"
-      />
+    <el-form-item label="Taxi via">
+      <el-input v-model="form.taxiTo" autocomplete="off" />
     </el-form-item>
     <el-form-item label="Parking">
       <el-select
@@ -93,31 +58,26 @@
 import { reactive, ref, computed, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { serverKey, airportIdentKey, aircraftsKey, parkingsKey, presetFlightplansKey } from '../injection-keys'
-import type { Parking, Flightplan } from '../types'
+import { serverKey, aircraftsKey, parkingsKey } from '../injection-keys'
+import type { Parking } from '../types'
 
+const props = defineProps<{
+  aircraftId: string
+}>()
 const emit = defineEmits<{
   submit: [aircraftId: string]
 }>()
 
 const server = inject(serverKey)!
-const airportIdent = inject(airportIdentKey)!
 const parkings = inject(parkingsKey)!
-const presetFlightplans = inject(presetFlightplansKey)!
 const aircrafts = inject(aircraftsKey)!
 
 const isLoading = ref(false)
 const form = reactive({
   parkingId: null,
-  route: '',
-  arrival: '',
-  callsign: '',
-  cruiseAltitude: null as number | null,
+  taxiTo: '',
 })
 
-const matchedPresets = computed(() =>
-  presetFlightplans.value.filter((fp) => fp.arrivalAirport === form.arrival)
-)
 const cargoParkings = computed(() =>
   parkings.value.filter(parking => parking.type.includes('Cargo'))
 )
@@ -139,33 +99,21 @@ function getIsParkingDisabled (parking: Parking) {
 const onClickSubmit = async () => {
   isLoading.value = true
   try {
-    const resp = await fetch(`${server?.value}/aircrafts`, {
+    await fetch(`${server?.value}/aircrafts/${props.aircraftId}/taxi-to-bay`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        intention: 'departure',
-        callsign: (form.callsign) ? form.callsign.toUpperCase() : null,
         parkingId: form.parkingId,
-        flightplan: (form.arrival) ? {
-          departure: airportIdent.value,
-          route: form.route,
-          arrival: form.arrival,
-          cruiseAltitude: form.cruiseAltitude || null
-        } : null
+        taxiPath: form.taxiTo.split(' '),
       })
     })
-    const data = await resp.json()
-    ElMessage({
-      message: 'Aircraft created successfully, callsign: ' + data.callsign,
-      type: 'success'
-    })
-    emit('submit', data.id)
+    emit('submit', props.aircraftId)
   } catch (err) {
     console.error(err)
     ElMessage({
-      message: 'Failed to create aircraft',
+      message: 'Failed to taxi to parking',
       type: 'error'
     })
   } finally {

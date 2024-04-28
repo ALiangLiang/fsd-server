@@ -38,6 +38,10 @@ class Aircraft:
         self.position = position
         return self
 
+    def set_speed(self, speed: Speed):
+        self.speed = speed
+        return self
+
     def set_squawk(self, squawk_code: str):
         self.squawk_code = squawk_code
         return self

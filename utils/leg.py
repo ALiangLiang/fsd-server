@@ -1,6 +1,8 @@
 from geopy.distance import Distance
 
 from messages.Position import Position
+from utils.physics import Speed
+from utils.bearing import Bearing
 from db.models import Fix, Airway, RunwayEnd, ProcedureLeg
 
 
@@ -12,7 +14,11 @@ class Leg:
         lonx: float,
         altitude: Distance | None = None,
         is_missed: bool = False,
-        fix: Fix | None = None
+        fix: Fix | None = None,
+        max_altitude_limit: Distance | None = None,
+        min_altitude_limit: Distance | None = None,
+        speed_limit: Speed | None = None,
+        course: Bearing | None = None,
     ):
         self.ident = ident
         self.laty = laty
@@ -20,6 +26,10 @@ class Leg:
         self.altitude = altitude
         self.is_missed = is_missed
         self.fix = fix
+        self.max_altitude_limit = max_altitude_limit
+        self.min_altitude_limit = min_altitude_limit
+        self.speed_limit = speed_limit
+        self.course = course
 
     @classmethod
     def from_procedure_leg(cls, procedure_leg: ProcedureLeg, fix: Fix | None = None):
@@ -30,6 +40,18 @@ class Leg:
             lonx=procedure_leg.fix_lonx,
             fix=fix,
             is_missed=bool(is_missed_flag),
+            max_altitude_limit=Distance(
+                feet=procedure_leg.altitude1
+            ) if procedure_leg.altitude1 is not None else None,
+            min_altitude_limit=Distance(
+                feet=procedure_leg.altitude2
+            ) if procedure_leg.altitude2 is not None else None,
+            speed_limit=Speed(
+                knots=procedure_leg.speed_limit
+            ) if procedure_leg.speed_limit is not None else None,
+            course=Bearing(
+                procedure_leg.course
+            ) if procedure_leg.course is not None else None,
         )
 
     @classmethod

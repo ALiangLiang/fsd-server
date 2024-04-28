@@ -1,15 +1,15 @@
 from datetime import timedelta
 from enum import Enum
 from logging import getLogger
+from math import isclose
 
 from geopy.distance import Distance
 
-from db.models import TaxiPath, Parking
+from db.models import TaxiPath, Parking, RunwayEnd
 from utils.geo import (
     get_bearing_distance,
     fix_radial_distance,
 )
-from utils.bearing import Bearing
 from utils.flightplan import Flightplan
 from utils.leg import Leg
 from utils.unit import lbs_to_kg
@@ -45,9 +45,13 @@ class AircraftStatus(Enum):
     NOT_DELIVERED = 0
     DELIVERED = 1  # delivered but not approved pushback and startup
     APPROVED_PUSHBACK_STARTUP = 2  # approved pushback and startup
-    APPROVED_TAXI = 3  # approved taxi
+    APPROVED_TAXI_TO_RWY = 3  # approved taxi
     LINEUP_WAIT = 4  # cleared for takeoff
     CLEARED_TAKEOFF = 5  # cleared for takeoff
+    CLEARED_LAND = 6  # cleared to land
+    MISSED_APPROACH = 7  # missed approach
+    VACATE_RUNWAY = 8  # vacate runway
+    APPROVED_TAXI_TO_BAY = 9  # approved taxi to bay
 
 
 class BotAircraft(Aircraft):
@@ -123,16 +127,30 @@ class BotAircraft(Aircraft):
         self.sid_legs = sid_legs
         self.star_legs = star_legs
         self.approach_legs = approach_legs
+        # top of descent. Distance to the leg
+        self.tod: tuple[Distance, Leg] | None = None
         self.speed_limit = speed_limit
         self.target_altitude = target_altitude
         self.pushback_path: list[Position] = []
         self.taxi_path: list[Position] = []
+        self.vacatable_taxi_paths: dict[str, list[Position]] = {}
         self.departure_path: list[Position] = []
+        self.expect_runway_end: RunwayEnd | None = None
         self.parking: Parking | None = None
         self.status = AircraftStatus.NOT_DELIVERED
 
         self.takeoff_acceleration = get_acceleration_by_newton_2th(
             lbs_to_kg(self.to1),
+            self.mtow,
+            self.drag_coefficient
+        )
+        self.decend_acceleration = get_acceleration_by_newton_2th(
+            0,
+            self.mtow,
+            self.drag_coefficient
+        )
+        self.retard_acceleration = get_acceleration_by_newton_2th(
+            -lbs_to_kg(self.to2),
             self.mtow,
             self.drag_coefficient
         )
@@ -142,13 +160,12 @@ class BotAircraft(Aircraft):
     def is_no_more_legs(self):
         return len(self.legs) == 0
 
-    def set_parking(self, parking: Parking):
+    def set_parking(self, parking: Parking | None):
         self.parking = parking
-        position = parking.position.copy()
-        position.set_altitude(
-            Distance(feet=parking.airport.altitude)
-        )
-        self.position = position
+        return self
+
+    def set_expect_runway_end(self, runway_end: RunwayEnd | None):
+        self.expect_runway_end = runway_end
         return self
 
     def set_status(self, status: AircraftStatus):
@@ -163,8 +180,8 @@ class BotAircraft(Aircraft):
 
     def start_taxi(self, taxi_path: list[Position] | None = None):
         if taxi_path is not None:
-            self.taxi_path = taxi_path
-        self.status = AircraftStatus.APPROVED_TAXI
+            self.taxi_path += taxi_path
+        self.status = AircraftStatus.APPROVED_TAXI_TO_RWY
         return self
 
     def set_departure_path(self, departure_path: list[Position]):
@@ -181,6 +198,16 @@ class BotAircraft(Aircraft):
         if departure_path is not None:
             self.departure_path = departure_path
         self.status = AircraftStatus.CLEARED_TAKEOFF
+        return self
+
+    def start_missed_approach(self):
+        self.status = AircraftStatus.MISSED_APPROACH
+        return self
+
+    def start_land(self, vacated_taxi_path: list[Position] | None = None):
+        if vacated_taxi_path is not None:
+            self.taxi_path = vacated_taxi_path
+        self.status = AircraftStatus.CLEARED_LAND
         return self
 
     def set_speed_limit(self, speed_limit: Speed | None):
@@ -200,6 +227,14 @@ class BotAircraft(Aircraft):
             self.star_legs,
             self.approach_legs
         )
+        return self
+
+    def set_approach_legs(self, approach_legs: list[Leg]):
+        old_legs = combine_legs(self.star_legs, self.approach_legs)
+        self.remove_continuously_end_legs(old_legs)
+
+        self.approach_legs = approach_legs
+        self.legs = approach_legs
         return self
 
     def set_star_n_approach_legs(self, star_legs: list[Leg], approach_legs: list[Leg]):
@@ -262,7 +297,7 @@ class BotAircraft(Aircraft):
             new_position.longitude,
         )
 
-    def taxi_to_hold_short(self, after_time: timedelta):
+    def taxi_to_hold_short(self, after_time: timedelta, speed: Speed = Speed(knots=30)):
         if self.position is None:
             return
 
@@ -274,14 +309,19 @@ class BotAircraft(Aircraft):
             self.taxi_path[0]
         )
         self.heading = bearing
-        self.speed = Speed(knots=15)
+        self.speed = speed
 
         distance: Distance = min(
             self.speed * after_time,
             distance_to_leg
         )
         if distance_to_leg <= distance:
+            self.position.set_coordinates(
+                self.taxi_path[0].latitude,
+                self.taxi_path[0].longitude,
+            )
             self.taxi_path.pop(0)
+            return
 
         new_position = fix_radial_distance(self.position, bearing, distance)
         self.position.set_coordinates(
@@ -336,7 +376,7 @@ class BotAircraft(Aircraft):
         )
 
     def takeoff(self, after_time: timedelta):
-        if self.is_no_more_legs or self.flightplan is None or self.position is None:
+        if self.flightplan is None or self.position is None:
             return
 
         # keep taxiing after clear for takeoff
@@ -344,44 +384,30 @@ class BotAircraft(Aircraft):
             self.taxi_to_hold_short(after_time)
             return
 
-        bearing, distance_to_leg = get_bearing_distance(
-            self.position,
-            self.legs[0].position
-        )
+        target_leg = self.legs[0] if len(self.legs) > 0 else None
+
+        bearing, distance_to_leg = self.heading, Distance(nautical=999999)
+        if target_leg is not None:
+            bearing, distance_to_leg = get_bearing_distance(
+                self.position,
+                target_leg.position
+            )
 
         # turn
-        if distance_to_leg < Distance(nautical=5):
-            if bearing > self.heading:  # turn right
-                self.heading = min(
-                    # 4 degrees per second
-                    self.heading + Bearing(4) * after_time.total_seconds(),
-                    self.heading
-                )
-            else:  # turn left
-                self.heading = max(
-                    # 4 degrees per second
-                    self.heading - Bearing(4) * after_time.total_seconds(),
-                    self.heading
-                )
-
-        # update speed
-        speed_limit = self.flightplan.cruise_speed if self.speed_limit is None else self.speed_limit
-        if self.position.altitude_ < Distance(feet=10000):
-            # if altitude below 10000ft, speed limit to 250 knots
-            speed_limit = min(
-                speed_limit,
-                Speed(knots=250)
-            )
-        if self.speed < speed_limit:
-            self.speed += self.takeoff_acceleration * after_time
-            distance = get_displacement_by_seconds(
-                self.takeoff_acceleration,
-                after_time,
-                self.speed
-            )
-        else:
-            self.speed = speed_limit
-            distance: Distance = self.speed * after_time
+        self.heading = bearing
+        # if distance_to_leg < Distance(nautical=5):
+        #     if bearing > self.heading:  # turn right
+        #         self.heading = min(
+        #             # 4 degrees per second
+        #             self.heading + Bearing(4) * after_time.total_seconds(),
+        #             self.heading
+        #         )
+        #     else:  # turn left
+        #         self.heading = max(
+        #             # 4 degrees per second
+        #             self.heading - Bearing(4) * after_time.total_seconds(),
+        #             self.heading
+        #         )
 
         # if altitude below 10000ft, speed limit to 250 knots
         if self.position.altitude_ < Distance(feet=10000):
@@ -390,12 +416,35 @@ class BotAircraft(Aircraft):
                 Speed(knots=250)
             )
 
-        if self.is_on_ground is True and self.speed > self.vr:
-            # airborne
-            self.is_on_ground = False
+        if self.is_on_ground is True:
+            if not self.is_no_more_legs:
+                if self.speed > self.vr:
+                    # airborne
+                    self.is_on_ground = False
+            else:
+                # landed
+                self.set_speed_limit(Speed(knots=30))
+                if self.speed < Speed(knots=60) and self.status == AircraftStatus.CLEARED_LAND:
+                    self.status = AircraftStatus.VACATE_RUNWAY
+
+                    if len(self.taxi_path) == 0:
+                        vacatable_taxi_paths = []
+                        for taxi_path in self.vacatable_taxi_paths.values():
+                            bearing, distance_to_leg = get_bearing_distance(
+                                self.position,
+                                taxi_path[0]
+                            )
+                            if isclose(self.heading.degrees, bearing.degrees, abs_tol=60):
+                                vacatable_taxi_paths.append(
+                                    (taxi_path, distance_to_leg))
+                        if len(vacatable_taxi_paths) != 0:
+                            self.taxi_path = min(
+                                vacatable_taxi_paths,
+                                key=lambda x: x[1]
+                            )[0]
 
         # update altitude
-        if self.is_on_ground is False:
+        if self.is_on_ground is False and self.position.altitude_ is not None:
             if self.target_altitude is None:
                 # keep cruise altitude
                 roc = self.climb_roc
@@ -409,39 +458,66 @@ class BotAircraft(Aircraft):
                         self.flightplan.cruise_altitude - self.position.altitude_
                     )
                     self.position.add_altitude(added_altitude)
-            else:
-                # 100ft tolerance
-                if self.position.altitude_ < self.target_altitude - Distance(feet=100):
+            # 100ft tolerance
+            elif not isclose(self.position.altitude_.feet, self.target_altitude.feet, abs_tol=100):
+                if self.position.altitude_ < self.target_altitude:
                     self.position.add_altitude(
                         min(
                             self.climb_roc * after_time,
                             self.target_altitude - self.position.altitude_
                         )
                     )
-                elif self.position.altitude_ > self.target_altitude + Distance(feet=100):
+                elif self.position.altitude_ > self.target_altitude:
                     self.position.add_altitude(
                         min(
                             self.descent_roc * after_time,
                             self.position.altitude_ - self.target_altitude
                         )
                     )
+            else:
+                self.position.set_altitude(self.target_altitude)
+            # check is touch down
+            if target_leg is None and self.position.altitude_ <= self.target_altitude:
+                self.is_on_ground = True
+                self.position.set_altitude(self.target_altitude)
+                self.set_speed_limit(Speed(knots=0))
 
-        #     if is_send_airborne_msg == False and self.position.altitude_ > 500:
-        #         text_message = TextMessage(
-        #             self.callsign,
-        #             frequency_to_abbr(FREQUENCE),
-        #             'Taipei Tower, Good evening, ' + AC_CALLSIGN + ', airborne'
-        #         )
-        #         await send(client_socket, str(text_message))
-        #         is_send_airborne_msg = True
-
-        # logger.debug(
-        #     f'{self.callsign} - move meters: {distance.meters}, speed: {self.speed.knots} knots, ' +
-        #     'altitude: {self.position.altitude_} feets, on ground: {self.is_on_ground}'
-        # )
-
-        # logger.debug(self.callsign + ' - Left legs:' +
-        #              ' '.join([leg.ident for leg in self.legs]))
+        # update speed
+        speed_limit = self.flightplan.cruise_speed if self.speed_limit is None else self.speed_limit
+        if self.position.altitude_ < Distance(feet=10000):
+            # if altitude below 10000ft, speed limit to 250 knots
+            speed_limit = min(
+                speed_limit,
+                Speed(knots=240)
+            )
+        if isclose(self.speed.knots, speed_limit.knots, abs_tol=2):
+            distance: Distance = self.speed * after_time
+        if self.speed < speed_limit:
+            self.speed += self.takeoff_acceleration * after_time
+            distance = get_displacement_by_seconds(
+                self.takeoff_acceleration,
+                after_time,
+                self.speed
+            )
+        elif self.speed > speed_limit:
+            if not self.is_on_ground:
+                self.speed += self.decend_acceleration * after_time
+                if self.speed < speed_limit:
+                    self.speed = speed_limit
+                distance = get_displacement_by_seconds(
+                    self.decend_acceleration,
+                    after_time,
+                    self.speed
+                )
+            else:
+                self.speed += self.retard_acceleration * after_time
+                if self.speed < speed_limit:
+                    self.speed = speed_limit
+                distance = get_displacement_by_seconds(
+                    self.decend_acceleration,
+                    after_time,
+                    self.speed
+                )
 
         if distance_to_leg < distance:
             self.to_next_leg()
@@ -452,20 +528,25 @@ class BotAircraft(Aircraft):
             new_position.longitude,
         )
 
+    def vacate_runway(self, after_time: timedelta):
+        self.taxi_to_hold_short(after_time)
+
     # TODO: calculate TOD
-    # TODO: brake after landed
-    # TODO: shutdown after stoped
     # TODO: adjust roc by leg restriction
     # TODO: support smooth turn
     def update_status(self, after_time: timedelta):
         if self.status == AircraftStatus.APPROVED_PUSHBACK_STARTUP:
             self.pushback(after_time)
-        elif self.status == AircraftStatus.APPROVED_TAXI:
+        elif self.status == AircraftStatus.APPROVED_TAXI_TO_RWY:
             self.taxi_to_hold_short(after_time)
         elif self.status == AircraftStatus.LINEUP_WAIT:
             self.taxi_to_start(after_time)
         elif self.status == AircraftStatus.CLEARED_TAKEOFF:
             self.taxi_to_start_n_takeoff(after_time)
+        elif self.status == AircraftStatus.CLEARED_LAND:
+            self.taxi_to_start_n_takeoff(after_time)
+        elif self.status == AircraftStatus.VACATE_RUNWAY:
+            self.vacate_runway(after_time)
 
     def get_text_message(self, destination: str, text: str):
         return TextMessage(self.callsign, destination, text)
@@ -474,7 +555,7 @@ class BotAircraft(Aircraft):
         return self.get_text_message(destination, f'Hello, {self.callsign} radio check')
 
     def radio_check_atc(self, destination: str):
-        return self.get_text_message(destination, f'Read you 5 too')
+        return self.get_text_message(destination, 'Read you 5 too')
 
     def request_delivery(self, destination: str):
         if self.flightplan is None:

@@ -7,6 +7,7 @@ from db.init import Base
 from messages.Position import Position
 
 if TYPE_CHECKING:
+    from .approach import Approach
     from .runway import Runway
     from .start import Start
 
@@ -41,9 +42,12 @@ class RunwayEnd(Base):
     laty = Column(Float, nullable=False)
 
     runway: Mapped['Runway'] = relationship(
-        primaryjoin='Runway.primary_end_id == RunwayEnd.runway_end_id', back_populates='primary_end', uselist=False)
+        primaryjoin='Runway.primary_end_id == RunwayEnd.runway_end_id or Runway.secondary_end_id == RunwayEnd.runway_end_id',
+    )
     # approaches: Mapped['RunwayEnd'] = relationship(back_populates='runway_end')
     start: Mapped['Start'] = relationship(back_populates='runway_end')
+    approaches: Mapped[list['Approach']] = relationship(
+        back_populates='runway_end')
 
     @ property
     def position(self):

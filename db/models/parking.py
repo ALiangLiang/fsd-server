@@ -35,6 +35,11 @@ class Parking(Base):
         return Position(self.laty, self.lonx)
 
     @property
+    def full_name(self):
+        name = self.name if (self.name != 'NONE' or self.name is None) else ''
+        return name + str(self.number)
+
+    @property
     def type_description(self):
         return {
             'INVALID': 'Invalid',

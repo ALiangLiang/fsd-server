@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .airport import Airport
     from .approach_leg import ApproachLeg
     from .transition import Transition
+    from .runway_end import RunwayEnd
 
 
 class Approach(Base):
@@ -42,3 +43,5 @@ class Approach(Base):
                           ] = relationship(back_populates="approach")
     transitions: Mapped[List['Transition']] = relationship(
         back_populates='approach')
+    runway_end: Mapped['RunwayEnd'] = relationship(
+        back_populates="approaches")

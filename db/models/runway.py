@@ -43,9 +43,9 @@ class Runway(Base):
 
     airport: Mapped["Airport"] = relationship(back_populates="runways")
     primary_end: Mapped["RunwayEnd"] = relationship(
-        foreign_keys=[primary_end_id])
+        foreign_keys=[primary_end_id], back_populates='runway')
     secondary_end: Mapped["RunwayEnd"] = relationship(
-        foreign_keys=[secondary_end_id])
+        foreign_keys=[secondary_end_id], back_populates='runway')
 
     @property
     def position(self):

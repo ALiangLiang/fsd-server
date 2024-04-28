@@ -118,11 +118,12 @@ class Flightplan:
         ]
 
     def get_usable_approaches(self, star_approach: Approach | None = None):
-        start_leg_waypoint_ident = self.route.split(
-            ' ')[-1] if star_approach is None else star_approach.approach_legs[-1].fix_ident
         approach_approaches = get_approach_approaches_by_airport_ident(
             self.arrival_airport)
+        if star_approach is None:
+            return approach_approaches
 
+        start_leg_waypoint_ident = star_approach.approach_legs[-1].fix_ident
         usable_approaches: list[Approach] = []
         for aa in approach_approaches:
             if aa.approach_legs[0].fix_ident == start_leg_waypoint_ident:

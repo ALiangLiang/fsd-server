@@ -1,7 +1,8 @@
 import threading
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
-from utils.connection import Connection
+from utils.fsd_server import FsdServer
 
 
 def set_interval(func, sec: float, last_time: datetime):
@@ -18,12 +19,12 @@ class Tick:
     def __init__(
         self,
         sec: float,
-        connections: dict[str, Connection],
+        server: FsdServer,
         on_tick,
         on_tick_connection
     ) -> None:
         self.sec = sec
-        self.connections = connections
+        self.server = server
         self.on_tick = on_tick
         self.on_tick_connection = on_tick_connection
 
@@ -32,7 +33,7 @@ class Tick:
             self.on_tick()
 
             # copy to avoid RuntimeError: dictionary changed size during iteration
-            for conn in self.connections.values():
+            for conn in self.server.connections.values():
                 self.on_tick_connection(conn, after_time)
 
                 if conn.type != 'PILOT' or conn.aircraft is None:

@@ -16,6 +16,7 @@ from db.models import (
     Vor,
     Ndb,
     Runway,
+    RunwayEnd,
     TransitionLeg,
     Parking,
     TaxiPath,
@@ -23,6 +24,7 @@ from db.models import (
 )
 from utils.leg import Leg
 from utils.physics import Acceleration, Speed
+from utils.geo import get_bearing_distance
 from messages.Position import Position
 
 
@@ -127,6 +129,12 @@ def get_sid_legs(dep_airport: str, dep_runway: str, sid: str):
     if approach is None:
         return []
     return fill_position_on_legs(approach.approach_legs)
+
+
+def get_approach_by_id(approach_id: int):
+    return session.query(Approach).options(
+        joinedload(Approach.runway_end)
+    ).filter(Approach.approach_id == approach_id).first()
 
 
 def get_sid_approach_names_by_airport_ident(airport_ident: str) -> list[Approach]:
@@ -344,6 +352,10 @@ def get_legs_by_route_str(route_str: str):
     return legs
 
 
+def get_airport_by_id(airport_id: int) -> Airport | None:
+    return msfs_session.query(Airport).filter(Airport.airport_id == airport_id).first()
+
+
 def get_airport_by_ident(ident: str) -> Airport | None:
     return msfs_session.query(Airport).filter(Airport.ident == ident).first()
 
@@ -403,13 +415,17 @@ def get_taxt_positions_by_airport_ident_n_taxi_path_names(airport_ident: str, ta
     ).all()
 
 
-def get_taxt_positions_by_airport_id_n_taxi_path_names(airport_id: int, taxi_path_names: list[str]):
+def get_taxi_positions_by_airport_id_n_taxi_path_names(airport_id: int, taxi_path_names: list[str]):
     return msfs_session.query(TaxiPath).filter(
         and_(
             TaxiPath.airport_id == airport_id,
             TaxiPath.name.in_(taxi_path_names)
         )
     ).all()
+
+
+def get_taxt_paths_by_airport_id(airport_id: int) -> list[TaxiPath]:
+    return msfs_session.query(TaxiPath).filter(TaxiPath.airport_id == airport_id).all()
 
 
 def get_taxt_paths_by_parking_id(parking_id: int):
@@ -470,3 +486,31 @@ def get_start_by_airport_id_n_runway_name(airport_id: int, runway_name: str):
         Start.airport_id == airport_id,
         Start.runway_name == runway_name
     ).first()
+
+
+def get_runway_end_by_airport_id_n_runway_name(airport_id: int, runway_name: str) -> RunwayEnd | None:
+    runway_end = msfs_session.query(RunwayEnd).join(
+        Runway,
+        or_(
+            Runway.primary_end_id == RunwayEnd.runway_end_id,
+            Runway.secondary_end_id == RunwayEnd.runway_end_id
+        )
+    ).filter(
+        Runway.airport_id == airport_id,
+        RunwayEnd.name == runway_name
+    ).first()
+    return runway_end
+
+
+def get_runway_by_runway_end_id(runway_end_id: int) -> Runway | None:
+    runway_end = msfs_session.query(Runway).filter(
+        or_(
+            Runway.primary_end_id == runway_end_id,
+            Runway.secondary_end_id == runway_end_id
+        )
+    ).first()
+    return runway_end
+
+
+def get_taxi_path_endpoint_by_airport_id(airport_id: int):
+    return msfs_session.query(TaxiPath).filter(TaxiPath.airport_id == airport_id).all()

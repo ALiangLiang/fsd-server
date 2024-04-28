@@ -1,15 +1,25 @@
 import asyncio
-from datetime import timedelta
+from datetime import timedelta, datetime
 from logging import getLogger
+import threading
 
 from utils.fsd_controller import FsdController
 from utils.connection import Connection
-from utils.tick import Tick
 
 
 TICK_INTERVAL = 2
 
 logger = getLogger(__name__)
+
+
+def set_interval(func, sec: float, last_time: datetime):
+    def func_wrapper():
+        now = datetime.now()
+        set_interval(func, sec, now)
+        func(now - last_time)
+    t = threading.Timer(sec, func_wrapper)
+    t.start()
+    return t
 
 
 class FsdServer:
@@ -22,13 +32,31 @@ class FsdServer:
         self.host = host
         self.port = port
         self.connections: dict[str, Connection] = {}
-        self._tick = Tick(
-            sec=TICK_INTERVAL,
-            connections=self.connections,
-            on_tick=self.on_tick,
-            on_tick_connection=self.on_tick_connection,
-        )
         self.Controller = Controller
+
+    def start_tick(self):
+        def send_all_aircraft_position(after_time: timedelta):
+            self.on_tick()
+
+            # copy to avoid RuntimeError: dictionary changed size during iteration
+            for conn in self.connections.values():
+                self.on_tick_connection(conn, after_time)
+
+                if conn.type != 'PILOT' or conn.aircraft is None:
+                    continue
+
+                aircraft = conn.aircraft
+                position_update_message = aircraft.get_position_update_message()
+                for connection in self.connections.values():
+                    connection.send(str(position_update_message))
+            # average 200 seconds to generate an new aircraft
+            # if randint(0, 100) > 98:
+            #     factory.generate_w_random_situation()
+        return set_interval(
+            send_all_aircraft_position,
+            TICK_INTERVAL,
+            datetime.now()
+        )
 
     def _on_text_message(self, connection: Connection, raw_message: str):
         controller = self.Controller(connection, self.connections)
@@ -59,7 +87,7 @@ class FsdServer:
             self.host,
             self.port
         )
-        self._tick.start()
+        self.start_tick()
 
         self.on_start()
 

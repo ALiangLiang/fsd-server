@@ -3,9 +3,6 @@
     <el-form-item label="Taxi via">
       <el-input v-model="form.taxiTo" autocomplete="off" />
     </el-form-item>
-    <el-form-item label="Runway">
-      <el-input v-model="form.runway" autocomplete="off" />
-    </el-form-item>
     <el-form-item>
       <el-button type="primary" :loading="isLoading" @click="onClickSubmit">Submit</el-button>
     </el-form-item>
@@ -30,12 +27,10 @@ const server = inject(serverKey)
 const isLoading = ref(false)
 const form = reactive({
   taxiTo: '',
-  runway: '',
 })
 
 watch(() => props.aircraftId, () => {
   form.taxiTo = ''
-  form.runway = ''
 })
 
 const onClickSubmit = async () => {
@@ -48,7 +43,6 @@ const onClickSubmit = async () => {
       },
       body: JSON.stringify({
         taxiPath: form.taxiTo.split(' '),
-        runwayName: form.runway,
       })
     })
     emit('submit', props.aircraftId)
