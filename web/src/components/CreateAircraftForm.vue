@@ -116,7 +116,7 @@ const form = reactive({
 })
 
 const matchedPresets = computed(() =>
-  presetFlightplans.value.filter((fp) => fp.arrivalAirport === form.arrival)
+  presetFlightplans.value.filter((fp) => fp.departureAirport === airportIdent.value && fp.arrivalAirport === form.arrival)
 )
 const cargoParkings = computed(() =>
   parkings.value.filter(parking => parking.type.includes('Cargo'))
