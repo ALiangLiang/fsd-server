@@ -28,7 +28,7 @@
       <el-button 
         type="primary" 
         :loading="isLoading"
-        @click="onClickSubmit"
+        @click="() => onClickSubmit()"
       >
         Create One
       </el-button>

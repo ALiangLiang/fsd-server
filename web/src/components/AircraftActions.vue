@@ -2,7 +2,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.NOT_DELIVERED) ? 'primary' : 'default'"
     :loading="areLoading[0]"
-    @click="() => onClickClearanceDelivery(aircraft)"
+    @click="onClickClearanceDelivery"
   >
     Clearance Delivery
   </el-button>
@@ -16,7 +16,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.APPROVED_PUSHBACK_STARTUP) ? 'primary' : 'default'"
     :loading="areLoading[2]"
-    @click="() => onClickTaxiTo(aircraft)"
+    @click="onClickTaxiTo"
   >
     Taxi via...
   </el-button>
@@ -37,7 +37,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF) ? 'primary' : 'default'"
     :loading="areLoading[5]"
-    @click="() => onClickClimbDecendMaintain(aircraft)"
+    @click="onClickClimbDecendMaintain"
   >
     Climb/Decend and Maintain
   </el-button>
@@ -51,7 +51,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.VACATE_RUNWAY) ? 'primary' : 'default'"
     :loading="areLoading[7]"
-    @click="() => onClickTaxi2Bay(aircraft)"
+    @click="onClickTaxi2Bay"
   >
     Taxi to Bay
   </el-button>
@@ -94,7 +94,7 @@ const areLoading = ref(Array(8).fill(false))
 const Form = ref(ClearanceDeliveryForm)
 const server = inject(serverKey)!
 
-const onClickClearanceDelivery = async (aircraft: Aircraft) => {
+const onClickClearanceDelivery = async () => {
   Form.value = ClearanceDeliveryForm
   isShowDialog.value = true
 }
@@ -109,7 +109,7 @@ const onClickPushbackApproved = async (aircraft: Aircraft) => {
   areLoading.value[1] = false
   emit('clickUpdate', props.aircraft)
 }
-const onClickTaxiTo = async (aircraft: Aircraft) => {
+const onClickTaxiTo = async () => {
   Form.value = TaxiToForm
   isShowDialog.value = true
 }
@@ -135,7 +135,7 @@ const onClickClearedForTakeoff = async (aircraft: Aircraft) => {
   })
   areLoading.value[4] = false
 }
-const onClickClimbDecendMaintain = async (aircraft: Aircraft) => {
+const onClickClimbDecendMaintain = async () => {
   Form.value = ChangeAltitudeForm
   isShowDialog.value = true
 }
@@ -153,7 +153,7 @@ const onClickClearedToLand = async (aircraft: Aircraft) => {
   areLoading.value[6] = false
   emit('clickUpdate', props.aircraft)
 }
-const onClickTaxi2Bay = async (aircraft: Aircraft) => {
+const onClickTaxi2Bay = async () => {
   Form.value = Taxi2BayForm
   isShowDialog.value = true
 }
@@ -169,7 +169,7 @@ const onClickShutdown = async (aircraft: Aircraft) => {
   emit('clickUpdate', props.aircraft)
 }
 
-const onSubmit = async (aircraftId: string) => {
+const onSubmit = async () => {
   isShowDialog.value = false
   emit('clickUpdate', props.aircraft)
 }
