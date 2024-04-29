@@ -4,7 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from geopy.distance import Distance
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from training_server import training_server, TrainingController
 from helpers import (
@@ -19,23 +19,13 @@ from utils.connection import Connection
 
 app = FastAPI()
 
-origins = [
-    'http://192.168.0.5:9000',
-    'http://dev.d.wlliou.pw:9000',
-    'http://d.wlliou.pw:16809',
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
-)
-
 
 def to_lower_camel(string: str) -> str:
     words = string.split('_')
     return words[0] + ''.join(word.capitalize() for word in words[1:])
+
+
+app.mount("/console", StaticFiles(directory="web/dist"), name="static")
 
 
 class CamelModel(BaseModel):
