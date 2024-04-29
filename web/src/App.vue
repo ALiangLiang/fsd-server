@@ -34,12 +34,12 @@
     <el-table-column label="Parking" prop="parking.name" :width="80" />
     <el-table-column label="Squawk" prop="squawkCode" :width="80" />
     <el-table-column label="Route" prop="flightplan.route" />
-    <el-table-column label="Arrival" prop="flightplan.arrivalAirport" />
-    <el-table-column label="Cruise Altitude" prop="flightplan.cruiseAltitude" />
+    <el-table-column label="Arrival" prop="flightplan.arrivalAirport" :width="80" />
+    <el-table-column label="Cruise Altitude" prop="flightplan.cruiseAltitude" :width="80" />
     <el-table-column label="Target Altutude" prop="targetAltitude" :width="100" />
     <el-table-column label="Expect Runway" prop="expectRunway" :width="100" />
-    <el-table-column label="Status" prop="status" :formatter="getAirCraftStatus" />
-    <el-table-column align="right">
+    <el-table-column label="Status" prop="status" :formatter="getAirCraftStatus" :width="120" />
+    <el-table-column align="right" :min-width="160">
       <template #default="{ row: aircraft }">
         <aircraft-actions :aircraft="aircraft" @update-aircraft="onUpdateAircraft" />
       </template>
@@ -94,7 +94,7 @@ const intervalId = ref(-1)
 const isShowDialog = ref(false)
 const createWIntervalId = ref(-1)
 const callsignFilter = ref('')
-const server = ref('http://localhost:8000')
+const server = ref(document.location.origin)
 const airportIdent = ref('')
 const sidNames = ref<string[]>([])
 const approaches = ref<Approach[]>([])
@@ -109,7 +109,10 @@ const filteredAircrafts = computed(() =>
   aircrafts.value.filter((aircraft) => {
     return aircraft.callsign.includes(callsignFilter.value.toUpperCase()) && 
     (activeStatus.value === -1 || aircraft.status === activeStatus.value)
-  })
+  }).filter((aircraft) => [
+    aircraft.flightplan?.departureAirport,
+    aircraft.flightplan?.arrivalAirport
+  ].includes(airportIdent.value))
 )
 
 provide(serverKey, server)
@@ -154,7 +157,7 @@ const onUpdateAircraft = async (aircraftId: string) => {
 }
 
 onMounted(() => {
-  server.value = localStorage.getItem('server') ?? 'localhost:8000'
+  server.value = localStorage.getItem('server') ?? document.location.origin
   airportIdent.value = localStorage.getItem('airportIdent') ?? ''
 
   return updateAircraft()
