@@ -1,6 +1,6 @@
 <template>
   <el-form :model="form">
-    <el-form-item label="Sid Name">
+    <el-form-item label="Sid Name" required>
       <el-select
         v-model="form.sidName"
         filterable
@@ -18,10 +18,10 @@
         />
       </el-select>
     </el-form-item>
-    <el-form-item label="Squawk">
+    <el-form-item label="Squawk" required>
       <el-input v-model="form.squawkCode" autocomplete="off" />
     </el-form-item>
-    <el-form-item label="Initial Altitude">
+    <el-form-item label="Initial Altitude" required>
       <el-input-number 
         v-model="form.initialAltitude"
         :min="0" 
@@ -77,7 +77,7 @@ const onClickSubmit = async () => {
   } catch (err) {
     console.error(err)
     ElMessage({
-      message: 'Failed to change altitude',
+      message: 'Failed to clearnace delivery',
       type: 'error'
     })
   } finally {
