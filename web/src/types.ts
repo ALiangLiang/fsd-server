@@ -14,9 +14,14 @@ export enum AircraftStatus {
 export interface Aircraft {
   id: string
   callsign: string
-  parking: Parking
   status: AircraftStatus
   squawkCode: string
+  altitude: number
+  flightplanRoute: string | null
+  flightplan: Flightplan | null
+  expectRunway: string | null
+  parking: Parking | null
+  targetAltitude: number | null
 }
 
 export interface Parking {
@@ -30,6 +35,7 @@ export interface Flightplan {
   departureAirport: string
   arrivalAirport: string
   cruiseAltitude: number
+  cruiseSpeed: number
 }
 
 export interface Approach {
