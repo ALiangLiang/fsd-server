@@ -533,8 +533,8 @@ class BotAircraft(Aircraft):
                 altitude = self.position.altitude_
                 self.position.set_altitude(
                     max(
-                        target_leg.min_altitude_limit or 0,
-                        min(altitude, target_leg.max_altitude_limit or 999999)
+                        target_leg.min_altitude_limit or Distance(feet=0),
+                        min(altitude, target_leg.max_altitude_limit or Distance(feet=999999))
                     )
                 )
             if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
