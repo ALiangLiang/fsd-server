@@ -161,18 +161,27 @@ def create_aircraft(form: AircraftBody):
     return {'id': conn.id, 'callsign': aircraft.callsign}
 
 
+def get_connection_and_controller(aircraft_id: str):
+    conn = training_server.connections.get(aircraft_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail='Not found')
+    controller = TrainingController(
+        conn,
+        training_server.connections
+    )
+    return (
+        conn,
+        controller
+    )
+
+
 class Aircraft(CamelModel):
     target_altitude: int
 
 
 @app.put('/aircrafts/{aircraft_id}')
 def update_aircraft(aircraft_id: str, aircraft: Aircraft):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.change_altitude(
         target_conn,
         Distance(feet=aircraft.target_altitude)
@@ -182,12 +191,7 @@ def update_aircraft(aircraft_id: str, aircraft: Aircraft):
 
 @app.delete('/aircrafts/{aircraft_id}')
 def delete_aircraft(aircraft_id: str):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.shutdown(target_conn)
     return {}
 
@@ -200,12 +204,7 @@ class ClearanceDelivery(CamelModel):
 
 @app.post('/aircrafts/{aircraft_id}/clearance-delivery')
 def clearance_delivery(aircraft_id: str, form: ClearanceDelivery):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.delivered(
         target_conn,
         form.sid_name,
@@ -218,12 +217,7 @@ def clearance_delivery(aircraft_id: str, form: ClearanceDelivery):
 
 @app.post('/aircrafts/{aircraft_id}/startup-pushback-approved')
 def startup_pushback_approved(aircraft_id: str):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.pushback_approved(target_conn)
     return {}
 
@@ -234,36 +228,21 @@ class Taxi(CamelModel):
 
 @app.post('/aircrafts/{aircraft_id}/taxi')
 def taxi(aircraft_id: str, taxi: Taxi):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.taxi_approved(target_conn, taxi.taxi_path)
     return {}
 
 
 @app.post('/aircrafts/{aircraft_id}/lineup-and-wait')
 def lineup_and_wait(aircraft_id: str):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.lineup_and_wait(target_conn)
     return {}
 
 
 @app.post('/aircrafts/{aircraft_id}/cleared-takeoff')
 def cleared_takeoff(aircraft_id: str):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.cleared_takeoff(target_conn)
     return {}
 
@@ -274,12 +253,7 @@ class ClearedLandBody(CamelModel):
 
 @app.post('/aircrafts/{aircraft_id}/cleared-land')
 def cleared_land(aircraft_id: str, cleared_land_body: ClearedLandBody):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.cleared_land(target_conn)
     return {}
 
@@ -291,12 +265,7 @@ class Taxi2BayBody(CamelModel):
 
 @app.post('/aircrafts/{aircraft_id}/taxi-to-bay')
 def taxi_to_bay(aircraft_id: str, taxi_to_bay_body: Taxi2BayBody):
-    source_conn = training_server.connections[aircraft_id]
-    target_conn = training_server.connections[aircraft_id]
-    controller = TrainingController(
-        source_conn,
-        training_server.connections
-    )
+    target_conn, controller = get_connection_and_controller(aircraft_id)
     controller.taxi_to_bay(
         target_conn,
         taxi_to_bay_body.taxi_path,
