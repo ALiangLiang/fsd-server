@@ -1,3 +1,5 @@
+from geopy.distance import Distance
+
 from messages.IMessage import IMessage
 from messages.Position import Position
 
@@ -15,11 +17,11 @@ class ATCPositionUpdateMessage(IMessage):
         self.position = position
 
     @classmethod
-    def parse_raw_message(cls, raw_message):
+    def parse_raw_message(cls, raw_message: str):
         callsign, frequency, facility, visibility, rating, latitude, longitude, elevation = \
             raw_message[len(cls.command):].split(':')
         position = Position(float(latitude), float(longitude))
-        position.altitude_ = elevation
+        position.altitude_ = Distance(feet=float(elevation))
         return cls(callsign, '@' + frequency, int(facility), int(visibility), int(rating or 0), position)
 
     def __str__(self):
