@@ -25,7 +25,7 @@ def to_lower_camel(string: str) -> str:
     return words[0] + ''.join(word.capitalize() for word in words[1:])
 
 
-app.mount("/console", StaticFiles(directory="web/dist"), name="static")
+app.mount('/console', StaticFiles(directory='web/dist'), name='static')
 
 
 class CamelModel(BaseModel):
@@ -96,6 +96,8 @@ def get_aircrafts():
         } if conn.aircraft.flightplan is not None else None,
         'targetAltitude': int(conn.aircraft.target_altitude.feet) if conn.aircraft.target_altitude is not None else None,
         'expectRunway': conn.aircraft.expect_runway_end.name if conn.aircraft.expect_runway_end else None,
+        'isInterceptIls': conn.aircraft.is_intercept_ils,
+        'isOnGround': conn.aircraft.is_on_ground,
         'status': conn.aircraft.status
     } for conn in connections if conn.aircraft is not None]
 
@@ -129,7 +131,7 @@ def create_aircraft(form: AircraftBody):
 
     if form.intention == 'departure':
         aircraft = training_server.factory.generate_on_parking(
-            departure_airport_ident=form.flightplan.departure,
+            departure_airport_ident=flightplan.departure_airport,
             callsign=form.callsign,
             flightplan=flightplan,
             parking=None if form.parking_id is None else get_parking_by_parking_id(

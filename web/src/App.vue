@@ -38,7 +38,14 @@
     <el-table-column label="Cruise Altitude" prop="flightplan.cruiseAltitude" :width="80" />
     <el-table-column label="Target Altutude" prop="targetAltitude" :width="100" />
     <el-table-column label="Expect Runway" prop="expectRunway" :width="100" />
-    <el-table-column label="Status" prop="status" :formatter="getAirCraftStatus" :width="120" />
+    <el-table-column label="Status" :width="120">
+      <template #default="{ row: aircraft }">
+        {{ AircraftStatusMap[aircraft.status] }}
+        <span :style="(aircraft.status !== AircraftStatus.CLEARED_LAND) ? 'color: red' : ''">
+          {{ aircraft.isInterceptIls ? '(ILS intercepted)' : '' }}
+        </span>
+      </template>
+    </el-table-column>
     <el-table-column align="right" :min-width="160">
       <template #default="{ row: aircraft }">
         <aircraft-actions :aircraft="aircraft" @update-aircraft="onUpdateAircraft" />
@@ -60,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref, provide, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ElNotification } from 'element-plus'
 
 import {
   serverKey,
@@ -88,7 +96,6 @@ const AircraftStatusMap = {
   [AircraftStatus.VACATE_RUNWAY]: 'Vacate Runway',
   [AircraftStatus.APPROVED_TAXI_TO_BAY]: 'Approved Taxi to Bay',
 }
-const getAirCraftStatus = (row: Aircraft) => AircraftStatusMap[row.status]
 
 const intervalId = ref(-1)
 const isShowDialog = ref(false)
@@ -127,6 +134,22 @@ provide(createWIntervalIdKey, createWIntervalId)
 watch([server, airportIdent], () => {
   localStorage.setItem('server', server.value)
   localStorage.setItem('airportIdent', airportIdent.value)
+})
+watch(aircrafts, (newAircrafts, oldAircrafts) => {
+  newAircrafts.forEach((newAircraft) => {
+    const oldAircraft = oldAircrafts.find((oldAircraft) => oldAircraft.id === newAircraft.id)
+    if (oldAircraft === undefined) return
+
+    if (!oldAircraft.isInterceptIls && newAircraft.isInterceptIls) {
+      ElNotification({
+        title: 'Aircraft Updated',
+        message: `Aircraft ${newAircraft.callsign} is intercepting ILS on runway ${newAircraft.expectRunway}`,
+        position: 'bottom-right',
+        type: 'warning',
+        duration: 10000,
+      })
+    }
+  })
 })
 
 async function updateAircraft () {

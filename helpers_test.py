@@ -8,7 +8,7 @@ from helpers import (
     get_taxt_positions_by_airport_ident_n_taxi_path_names,
     get_parking_by_airport_n_name_n_number,
     get_sid_approaches_by_airport_ident_n_approach_name,
-    get_vatated_taxi_path_by_runway
+    get_runway_end_by_airport_id_n_runway_name
 )
 from messages.Position import Position
 from db.models import TaxiPath
@@ -121,5 +121,6 @@ class TestHelpers(unittest.TestCase):
         )
         self.assertEqual(len(sid_approaches), 1)
 
-    def test_get_vatated_taxi_path_by_runway(self):
-        print(get_vatated_taxi_path_by_runway(119066, '05L'))
+    def test_get_runway_end_by_airport_id_n_runway_name(self):
+        get_runway_end_by_airport_id_n_runway_name(
+            119066, '05R').position_on_gs

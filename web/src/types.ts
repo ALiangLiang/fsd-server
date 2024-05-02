@@ -22,6 +22,8 @@ export interface Aircraft {
   expectRunway: string | null
   parking: Parking | null
   targetAltitude: number | null
+  isInterceptIls: boolean
+  isOnGround: boolean
 }
 
 export interface Parking {

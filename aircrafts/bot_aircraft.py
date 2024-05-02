@@ -1,7 +1,7 @@
 from datetime import timedelta
 from enum import Enum
 from logging import getLogger
-from math import isclose
+from math import isclose, radians, tan
 
 from geopy.distance import Distance
 
@@ -138,6 +138,7 @@ class BotAircraft(Aircraft):
         self.expect_runway_end: RunwayEnd | None = None
         self.parking: Parking | None = None
         self.status = AircraftStatus.NOT_DELIVERED
+        self.is_intercept_ils = False
 
         self.takeoff_acceleration = get_acceleration_by_newton_2th(
             lbs_to_kg(self.to1),
@@ -340,6 +341,8 @@ class BotAircraft(Aircraft):
 
         if len(self.departure_path) != 0:
             self.taxi_to_start(after_time)
+        elif self.is_intercept_ils:
+            self.ils_approach(after_time)
         else:
             self.takeoff(after_time)
 
@@ -375,6 +378,45 @@ class BotAircraft(Aircraft):
             new_position.longitude,
         )
 
+    def update_speed(self, after_time: timedelta, flightplan: Flightplan, position: Position):
+        speed_limit = flightplan.cruise_speed if self.speed_limit is None else self.speed_limit
+        if position.altitude_ < Distance(feet=10000):
+            # if altitude below 10000ft, speed limit to 250 knots
+            speed_limit = min(
+                speed_limit,
+                Speed(knots=240)
+            )
+        distance = Distance(nautical=0)
+        if isclose(self.speed.knots, speed_limit.knots, abs_tol=2):
+            distance = self.speed * after_time
+        if self.speed < speed_limit:
+            self.speed += self.takeoff_acceleration * after_time
+            distance = get_displacement_by_seconds(
+                self.takeoff_acceleration,
+                after_time,
+                self.speed
+            )
+        elif self.speed > speed_limit:
+            if not self.is_on_ground:
+                self.speed += self.decend_acceleration * after_time
+                if self.speed < speed_limit:
+                    self.speed = speed_limit
+                distance = get_displacement_by_seconds(
+                    self.decend_acceleration,
+                    after_time,
+                    self.speed
+                )
+            else:
+                self.speed += self.retard_acceleration * after_time
+                if self.speed < speed_limit:
+                    self.speed = speed_limit
+                distance = get_displacement_by_seconds(
+                    self.decend_acceleration,
+                    after_time,
+                    self.speed
+                )
+        return distance
+
     def takeoff(self, after_time: timedelta):
         if self.flightplan is None or self.position is None:
             return
@@ -401,6 +443,10 @@ class BotAircraft(Aircraft):
                 self.position,
                 target_leg.position
             )
+
+            # intercept ILS
+            if target_leg.glide_slope_angle is not None:
+                self.is_intercept_ils = True
 
         # turn
         self.heading = bearing
@@ -491,42 +537,11 @@ class BotAircraft(Aircraft):
                 self.position.set_altitude(self.target_altitude)
                 self.set_speed_limit(Speed(knots=0))
 
-        # update speed
-        speed_limit = self.flightplan.cruise_speed if self.speed_limit is None else self.speed_limit
-        if self.position.altitude_ < Distance(feet=10000):
-            # if altitude below 10000ft, speed limit to 250 knots
-            speed_limit = min(
-                speed_limit,
-                Speed(knots=240)
-            )
-        if isclose(self.speed.knots, speed_limit.knots, abs_tol=2):
-            distance: Distance = self.speed * after_time
-        if self.speed < speed_limit:
-            self.speed += self.takeoff_acceleration * after_time
-            distance = get_displacement_by_seconds(
-                self.takeoff_acceleration,
-                after_time,
-                self.speed
-            )
-        elif self.speed > speed_limit:
-            if not self.is_on_ground:
-                self.speed += self.decend_acceleration * after_time
-                if self.speed < speed_limit:
-                    self.speed = speed_limit
-                distance = get_displacement_by_seconds(
-                    self.decend_acceleration,
-                    after_time,
-                    self.speed
-                )
-            else:
-                self.speed += self.retard_acceleration * after_time
-                if self.speed < speed_limit:
-                    self.speed = speed_limit
-                distance = get_displacement_by_seconds(
-                    self.decend_acceleration,
-                    after_time,
-                    self.speed
-                )
+        distance = self.update_speed(
+            after_time,
+            self.flightplan,
+            self.position
+        )
 
         if distance_to_leg < distance:
             if target_leg.max_altitude_limit is not None or target_leg.min_altitude_limit is not None:
@@ -534,11 +549,13 @@ class BotAircraft(Aircraft):
                 self.position.set_altitude(
                     max(
                         target_leg.min_altitude_limit or Distance(feet=0),
-                        min(altitude, target_leg.max_altitude_limit or Distance(feet=999999))
+                        min(altitude, target_leg.max_altitude_limit or Distance(
+                            feet=999999))
                     )
                 )
             if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
                 self.set_speed(target_leg.speed_limit)
+
             self.to_next_leg()
 
         new_position = fix_radial_distance(self.position, bearing, distance)
@@ -546,6 +563,56 @@ class BotAircraft(Aircraft):
             new_position.latitude,
             new_position.longitude,
         )
+
+    def ils_approach(self, after_time: timedelta):
+        # If intercepted ILS, should has expect runway end
+        if self.expect_runway_end is None:
+            return
+
+        loc_line = self.expect_runway_end.loc_line
+        touch_down_position = self.expect_runway_end.touch_down_position
+        if loc_line is None or touch_down_position is None:
+            raise Exception('The runway end doesn\'t equip ILS.')
+        if self.position is None or self.position.altitude_ is None:
+            raise Exception('The aircraft doesn\'t have position or altitude.')
+
+        point = loc_line.project_point([
+            self.position.longitude,
+            self.position.latitude,
+        ])
+        self.position.set_coordinates(
+            point[1],
+            point[0],
+        )
+
+        distance: Distance = self.speed * after_time
+        bearing, distance_to_leg = get_bearing_distance(
+            self.position,
+            touch_down_position
+        )
+
+        target_leg = self.legs[0]
+        radius = radians(abs(target_leg.glide_slope_angle))
+        altitude_to_ground = distance_to_leg * tan(radius)
+        if altitude_to_ground.feet < 100 and self.status != AircraftStatus.CLEARED_LAND:
+            # go around
+            pass
+
+        altitude = altitude_to_ground + touch_down_position.altitude_
+        self.position.set_altitude(altitude)
+
+        new_position = fix_radial_distance(self.position, bearing, distance)
+        self.position.set_coordinates(
+            new_position.latitude,
+            new_position.longitude,
+        )
+
+        # touch down
+        if distance > distance_to_leg:
+            self.position = touch_down_position.copy()
+            self.is_intercept_ils = False
+            self.is_on_ground = True
+            self.legs = []
 
     def vacate_runway(self, after_time: timedelta):
         self.taxi_to_hold_short(after_time)

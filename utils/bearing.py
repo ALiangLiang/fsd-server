@@ -3,8 +3,13 @@ def cmp(a, b):
 
 
 class Bearing:
-    def __init__(self, degrees: float):
-        self.degrees = degrees % 360
+    def __init__(self, heading: float, mag_var: float = 0.0):
+        self.heading = heading % 360
+        self.mag_var = mag_var
+
+    @property
+    def degrees(self):
+        return self.heading - self.mag_var
 
     def __str__(self):
         return f'{self.degrees:.1f}°'

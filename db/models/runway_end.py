@@ -1,7 +1,9 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, Integer, String, Float
-from sqlalchemy.orm import relationship, backref, Mapped
+from sqlalchemy.orm import relationship, Mapped
+from geopy.distance import Distance
+from skspatial.objects import Point, Line, Vector
 
 from db.init import Base
 from messages.Position import Position
@@ -10,6 +12,11 @@ if TYPE_CHECKING:
     from .approach import Approach
     from .runway import Runway
     from .start import Start
+    from .ils import Ils
+
+
+def position_to_point(position: Position):
+    return Point([position.longitude, position.latitude])
 
 
 class RunwayEnd(Base):
@@ -48,7 +55,38 @@ class RunwayEnd(Base):
     start: Mapped['Start'] = relationship(back_populates='runway_end')
     approaches: Mapped[list['Approach']] = relationship(
         back_populates='runway_end')
+    ils: Mapped[Optional['Ils']] = relationship(back_populates='runway_end')
 
-    @ property
+    @property
     def position(self):
         return Position(self.laty, self.lonx)
+
+    @property
+    def touch_down_position(self):
+        ils = self.ils
+        if ils is None:
+            return None
+
+        projection_point = Line.from_points(
+            position_to_point(ils.position),
+            position_to_point(self.position),
+        ).project_point(
+            position_to_point(ils.gs_position)
+        )
+        return Position(projection_point[1], projection_point[0], Distance(feet=ils.gs_altitude))
+
+    @property
+    def loc_line(self):
+        ils = self.ils
+        touch_down_position = self.touch_down_position
+        if ils is None or touch_down_position is None:
+            return None
+
+        vector2 = Vector.from_points(
+            position_to_point(ils.position),
+            position_to_point(self.position),
+        )
+        return Line(
+            position_to_point(touch_down_position),
+            vector2,
+        )

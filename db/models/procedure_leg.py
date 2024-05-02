@@ -23,11 +23,11 @@ class ProcedureLeg:
     recommended_fix_laty = Column(Float)
     is_flyover = Column(Integer, nullable=False)
     is_true_course = Column(Integer, nullable=False)
-    course = Column(Float)
-    distance = Column(Float)
-    time = Column(Float)
-    theta = Column(Float)
-    rho = Column(Float)
+    course = Column(Float)  # magnetic from ARINC
+    distance = Column(Float)  # Distance from source in NM
+    time = Column(Float)  # Only for holds in minute
+    theta = Column(Float)  # magnetic course to recommended navaid
+    rho = Column(Float)  # distance to recommended navaid in NM
     altitude1 = Column(Float)
     altitude2 = Column(Float)
     speed_limit_type = Column(String(2))

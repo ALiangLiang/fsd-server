@@ -19,6 +19,7 @@ class Leg:
         min_altitude_limit: Distance | None = None,
         speed_limit: Speed | None = None,
         course: Bearing | None = None,
+        glide_slope_angle: float | None = None,
     ):
         self.ident = ident
         self.laty = laty
@@ -30,6 +31,7 @@ class Leg:
         self.min_altitude_limit = min_altitude_limit
         self.speed_limit = speed_limit
         self.course = course
+        self.glide_slope_angle = glide_slope_angle
 
     @classmethod
     def from_procedure_leg(cls, procedure_leg: ProcedureLeg, fix: Fix | None = None):
@@ -52,6 +54,7 @@ class Leg:
             course=Bearing(
                 procedure_leg.course
             ) if procedure_leg.course is not None else None,
+            glide_slope_angle=procedure_leg.vertical_angle
         )
 
     @classmethod
