@@ -39,7 +39,7 @@
     <el-table-column label="Target Altutude" prop="targetAltitude" :width="100" />
     <el-table-column label="Expect Runway" prop="expectRunway" :width="100" />
     <el-table-column label="Status" :width="120">
-      <template #default="{ row: aircraft }">
+      <template #default="{ row: aircraft }: { row: Aircraft }">
         {{ AircraftStatusMap[aircraft.status] }}
         <span :style="(aircraft.status !== AircraftStatus.CLEARED_LAND) ? 'color: red' : ''">
           {{ aircraft.isInterceptIls ? '(ILS intercepted)' : '' }}
@@ -146,6 +146,15 @@ watch(aircrafts, (newAircrafts, oldAircrafts) => {
         message: `Aircraft ${newAircraft.callsign} is intercepting ILS on runway ${newAircraft.expectRunway}`,
         position: 'bottom-right',
         type: 'warning',
+        duration: 10000,
+      })
+    }
+    if (!oldAircraft.isGoAround && newAircraft.isGoAround) {
+      ElNotification({
+        title: 'Aircraft Updated',
+        message: `Aircraft ${newAircraft.callsign} is go around`,
+        position: 'bottom-right',
+        type: 'error',
         duration: 10000,
       })
     }

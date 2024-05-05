@@ -24,6 +24,7 @@ export interface Aircraft {
   targetAltitude: number | null
   isInterceptIls: boolean
   isOnGround: boolean
+  isGoAround: boolean
 }
 
 export interface Parking {
