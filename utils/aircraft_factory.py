@@ -254,13 +254,13 @@ class AircraftFactory:
             aircraft.set_status(AircraftStatus.CLEARED_TAKEOFF)
             aircraft.set_transponder_mode_c()
 
-            online_time = 380
-            for _ in range(0, online_time, 2):
-                if aircraft.is_no_more_legs:
-                    return
-                aircraft.update_status(timedelta(seconds=2))
-                if aircraft.is_on_ground:
-                    break
+            # online_time = 380
+            # for _ in range(0, online_time, 2):
+            #     if aircraft.is_no_more_legs:
+            #         return
+            #     aircraft.update_status(timedelta(seconds=2))
+            #     if aircraft.is_on_ground:
+            #         break
 
             self.aircrafts[callsign] = aircraft
             return aircraft
