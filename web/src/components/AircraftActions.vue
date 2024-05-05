@@ -74,7 +74,6 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.APPROVED_TAXI_TO_BAY) ? 'primary' : 'default'"
     :loading="areLoading[9]"
-    :disabled="aircraft.status !== AircraftStatus.APPROVED_TAXI_TO_BAY"
     @click="() => onClickShutdown(aircraft)"
   >
     Shutdown
