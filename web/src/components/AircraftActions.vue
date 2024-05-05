@@ -63,13 +63,15 @@
     Shutdown
   </el-button>
   
-  <el-dialog v-model="isShowDialog" title="Form" width="400">
-    <component 
-      :is="Form"
-      :aircraft-id="aircraft.id"
-      @submit="onSubmit" 
-    />
-  </el-dialog>
+  <Teleport to="body">
+    <el-dialog v-model="isShowDialog" title="Form" width="400" :z-index="9999">
+      <component 
+        :is="Form"
+        :aircraft-id="aircraft.id"
+        @submit="onSubmit" 
+      />
+    </el-dialog>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
