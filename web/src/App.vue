@@ -44,6 +44,9 @@
         <span :style="(aircraft.status !== AircraftStatus.CLEARED_LAND) ? 'color: red' : ''">
           {{ aircraft.isInterceptIls ? '(ILS intercepted)' : '' }}
         </span>
+        <span style="color: red">
+          {{ aircraft.isGoAround ? '(Go around)' : '' }}
+        </span>
       </template>
     </el-table-column>
     <el-table-column align="right" :min-width="160">
