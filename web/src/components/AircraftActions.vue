@@ -64,7 +64,7 @@
   </el-button>
   
   <Teleport to="body">
-    <el-dialog v-model="isShowDialog" title="Form" width="400" :z-index="9999">
+    <el-dialog v-model="isShowDialog" title="Form" width="400">
       <component 
         :is="Form"
         :aircraft-id="aircraft.id"
