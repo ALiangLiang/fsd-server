@@ -111,7 +111,7 @@ def get_aircrafts():
         'expectRunway': conn.aircraft.expect_runway_end.name if conn.aircraft.expect_runway_end else None,
         'isInterceptIls': conn.aircraft.is_intercept_ils,
         'isOnGround': conn.aircraft.is_on_ground,
-        'isMissedApproach': conn.aircraft.legs[0].is_missed if len(conn.aircraft.legs) else None,
+        'isGoAround': conn.aircraft.legs[0].is_missed if len(conn.aircraft.legs) else None,
         'status': conn.aircraft.status
     } for conn in connections if conn.aircraft is not None]
 
