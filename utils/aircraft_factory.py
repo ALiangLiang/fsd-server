@@ -9,6 +9,7 @@ from utils.squawk_code import generate_taipei_fir_squawk_code
 from utils.preset_flightplans import flightplans
 from utils.flightplan import Flightplan
 from utils.physics import Speed
+from utils.squawk_code import choise_squawk_code_in_ranges, squawk_code_2_int
 from db.models import Parking
 from helpers import fill_position_on_legs, get_start_leg, get_airport_by_ident, get_approach_by_id
 from aircrafts.bot_aircraft import BotAircraft, TransponderMode, AircraftStatus
@@ -212,7 +213,9 @@ class AircraftFactory:
                     callsign=callsign,
                     flightplan=flightplan,
                     is_on_ground=False,
-                    squawk_code='2000',
+                    squawk_code=choise_squawk_code_in_ranges(
+                        (squawk_code_2_int('0100'), squawk_code_2_int('6777')),
+                    ),
                     transponder_mode=TransponderMode.STANDBY
                 )
             else:
@@ -235,12 +238,10 @@ class AircraftFactory:
             if len(usable_transitions) != 0:
                 used_transition = random.choice(usable_transitions)
             approach_legs = used_approach.approach_legs if used_approach is not None else []
-            not_missed_approach_legs = [
-                al for al in approach_legs if al.is_missed == 0]
             aircraft.set_approach_legs(
                 fill_position_on_legs(
                     (used_transition.transition_legs if used_transition is not None else []) +
-                    not_missed_approach_legs,
+                    approach_legs,
                     flightplan.arrival_airport
                 )
             )
@@ -253,13 +254,13 @@ class AircraftFactory:
             aircraft.set_status(AircraftStatus.CLEARED_TAKEOFF)
             aircraft.set_transponder_mode_c()
 
-            # online_time = 380
-            # for _ in range(0, online_time, 2):
-            #     if aircraft.is_no_more_legs:
-            #         return
-            #     aircraft.update_status(timedelta(seconds=2))
-            #     if aircraft.is_on_ground:
-            #         break
+            online_time = 380
+            for _ in range(0, online_time, 2):
+                if aircraft.is_no_more_legs:
+                    return
+                aircraft.update_status(timedelta(seconds=2))
+                if aircraft.is_on_ground:
+                    break
 
             self.aircrafts[callsign] = aircraft
             return aircraft

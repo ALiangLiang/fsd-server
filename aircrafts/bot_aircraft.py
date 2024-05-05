@@ -3,13 +3,15 @@ from enum import Enum
 from logging import getLogger
 from math import isclose, radians, tan
 
-from geopy.distance import Distance
+from geopy.distance import Distance, distance as distance_between
 
-from db.models import TaxiPath, Parking, RunwayEnd
+from db.models import TaxiPath, Parking, RunwayEnd, ProcedureLegType
 from utils.geo import (
     get_bearing_distance,
     fix_radial_distance,
+    get_mag_var_by_position,
 )
+from utils.bearing import Bearing
 from utils.flightplan import Flightplan
 from utils.leg import Leg
 from utils.unit import lbs_to_kg
@@ -159,7 +161,8 @@ class BotAircraft(Aircraft):
 
     @property
     def is_no_more_legs(self):
-        return len(self.legs) == 0
+        not_missed_legs = [l for l in self.legs if not l.is_missed]
+        return len(not_missed_legs) == 0
 
     def set_parking(self, parking: Parking | None):
         self.parking = parking
@@ -436,16 +439,29 @@ class BotAircraft(Aircraft):
                 self.set_target_altitude(target_leg.min_altitude_limit)
             if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
                 self.set_speed_limit(target_leg.speed_limit)
+            elif target_leg.speed_limit is None:
+                self.set_speed_limit(None)
 
         bearing, distance_to_leg = self.heading, Distance(nautical=999999)
         if target_leg is not None:
-            bearing, distance_to_leg = get_bearing_distance(
-                self.position,
-                target_leg.position
-            )
+            if target_leg.procedure_leg_type == ProcedureLegType.HEADING_TO_ALTITUDE_TERMINATION:
+                mag_var = get_mag_var_by_position(self.position)
+                bearing = target_leg.course + Bearing(mag_var)
+                self.set_target_altitude(target_leg.min_altitude_limit)
+                distance_to_leg = Distance(0)
+            elif target_leg.procedure_leg_type == ProcedureLegType.HEADING_TO_DME_DISTANCE_TERMINATION:
+                mag_var = get_mag_var_by_position(self.position)
+                bearing = target_leg.course + Bearing(mag_var)
+                self.set_target_altitude(Distance(feet=3000))
+                distance_to_leg = Distance(0)
+            else:
+                bearing, distance_to_leg = get_bearing_distance(
+                    self.position,
+                    target_leg.position
+                )
 
             # intercept ILS
-            if target_leg.glide_slope_angle is not None:
+            if target_leg.glide_slope_angle is not None and not target_leg.is_missed:
                 self.is_intercept_ils = True
 
         # turn
@@ -544,19 +560,29 @@ class BotAircraft(Aircraft):
         )
 
         if distance_to_leg < distance:
-            if target_leg.max_altitude_limit is not None or target_leg.min_altitude_limit is not None:
-                altitude = self.position.altitude_
-                self.position.set_altitude(
-                    max(
-                        target_leg.min_altitude_limit or Distance(feet=0),
-                        min(altitude, target_leg.max_altitude_limit or Distance(
-                            feet=999999))
-                    )
+            if target_leg.procedure_leg_type == ProcedureLegType.HEADING_TO_ALTITUDE_TERMINATION:
+                if self.position.altitude_ >= (target_leg.min_altitude_limit - Distance(feet=100)):
+                    self.to_next_leg()
+            elif target_leg.procedure_leg_type == ProcedureLegType.HEADING_TO_DME_DISTANCE_TERMINATION:
+                ils = self.expect_runway_end.ils
+                distance_to_dme = distance_between(
+                    (self.position.latitude, self.position.longitude),
+                    (ils.dme_laty, ils.dme_lonx)
                 )
-            if target_leg.speed_limit is not None and self.speed > target_leg.speed_limit:
-                self.set_speed(target_leg.speed_limit)
+                if distance_to_dme > Distance(nautical=target_leg.procedure_leg.distance):
+                    self.to_next_leg()
+            elif not target_leg.is_holding_fix:
+                if target_leg.max_altitude_limit is not None or target_leg.min_altitude_limit is not None:
+                    altitude = self.position.altitude_
+                    self.position.set_altitude(
+                        max(
+                            target_leg.min_altitude_limit or Distance(feet=0),
+                            min(altitude, target_leg.max_altitude_limit or Distance(
+                                feet=999999))
+                        )
+                    )
 
-            self.to_next_leg()
+                self.to_next_leg()
 
         new_position = fix_radial_distance(self.position, bearing, distance)
         self.position.set_coordinates(
@@ -595,8 +621,9 @@ class BotAircraft(Aircraft):
         radius = radians(abs(target_leg.glide_slope_angle))
         altitude_to_ground = distance_to_leg * tan(radius)
         if altitude_to_ground.feet < 100 and self.status != AircraftStatus.CLEARED_LAND:
-            # go around
-            pass
+            self.is_intercept_ils = False
+            # follow missed approach procedure
+            self.legs = [l for l in self.legs if l.is_missed]
 
         altitude = altitude_to_ground + touch_down_position.altitude_
         self.position.set_altitude(altitude)
@@ -613,6 +640,9 @@ class BotAircraft(Aircraft):
             self.is_intercept_ils = False
             self.is_on_ground = True
             self.legs = []
+
+    def holding(self, after_time: timedelta):
+        pass
 
     def vacate_runway(self, after_time: timedelta):
         self.taxi_to_hold_short(after_time)

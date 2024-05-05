@@ -3,7 +3,7 @@ from geopy.distance import Distance
 from messages.Position import Position
 from utils.physics import Speed
 from utils.bearing import Bearing
-from db.models import Fix, Airway, RunwayEnd, ProcedureLeg
+from db.models import Fix, Airway, RunwayEnd, ProcedureLeg, ApproachFixType, ProcedureLegType
 
 
 class Leg:
@@ -20,6 +20,9 @@ class Leg:
         speed_limit: Speed | None = None,
         course: Bearing | None = None,
         glide_slope_angle: float | None = None,
+        is_holding_fix: bool = False,
+        procedure_leg_type: ProcedureLegType | None = None,
+        procedure_leg: ProcedureLeg | None = None
     ):
         self.ident = ident
         self.laty = laty
@@ -32,29 +35,54 @@ class Leg:
         self.speed_limit = speed_limit
         self.course = course
         self.glide_slope_angle = glide_slope_angle
+        self.is_holding_fix = is_holding_fix
+        self.procedure_leg_type = procedure_leg_type
+        self.procedure_leg = procedure_leg
 
     @classmethod
     def from_procedure_leg(cls, procedure_leg: ProcedureLeg, fix: Fix | None = None):
         is_missed_flag = getattr(procedure_leg, 'is_missed', 0)
+        procedure_leg_type = ProcedureLegType(procedure_leg.type)
+
+        altitude_1 = Distance(
+            feet=procedure_leg.altitude1
+        ) if procedure_leg.altitude1 is not None else None
+        altitude_2 = Distance(
+            feet=procedure_leg.altitude2
+        ) if procedure_leg.altitude2 is not None else None
+
+        match procedure_leg_type:
+            case ProcedureLegType.HEADING_TO_ALTITUDE_TERMINATION | ProcedureLegType.HOLD_TO_MANUAL_TERMINATION:
+                max_altitude_limit = None
+                min_altitude_limit = altitude_1
+            case ProcedureLegType.HEADING_TO_DME_DISTANCE_TERMINATION:
+                max_altitude_limit = None
+                min_altitude_limit = None
+            case ProcedureLegType.DIRECT_TO_FIX:
+                max_altitude_limit = altitude_1
+                min_altitude_limit = altitude_1
+            case _:
+                max_altitude_limit = altitude_1
+                min_altitude_limit = altitude_2
+
         return cls(
             ident=procedure_leg.fix_ident,
             laty=procedure_leg.fix_laty,
             lonx=procedure_leg.fix_lonx,
             fix=fix,
             is_missed=bool(is_missed_flag),
-            max_altitude_limit=Distance(
-                feet=procedure_leg.altitude1
-            ) if procedure_leg.altitude1 is not None else None,
-            min_altitude_limit=Distance(
-                feet=procedure_leg.altitude2
-            ) if procedure_leg.altitude2 is not None else None,
+            max_altitude_limit=max_altitude_limit,
+            min_altitude_limit=min_altitude_limit,
             speed_limit=Speed(
                 knots=procedure_leg.speed_limit
             ) if procedure_leg.speed_limit is not None else None,
             course=Bearing(
                 procedure_leg.course
             ) if procedure_leg.course is not None else None,
-            glide_slope_angle=procedure_leg.vertical_angle
+            glide_slope_angle=procedure_leg.vertical_angle,
+            is_holding_fix=procedure_leg.approach_fix_type == ApproachFixType.HOLDING_FIX.value,
+            procedure_leg_type=procedure_leg_type,
+            procedure_leg=procedure_leg
         )
 
     @classmethod

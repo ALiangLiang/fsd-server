@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from geopy.distance import Distance
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from training_server import training_server, TrainingController
 from helpers import (
@@ -18,6 +19,18 @@ from utils.flightplan import Flightplan
 from utils.connection import Connection
 
 app = FastAPI()
+
+origins = [
+    'http://dev.d.wlliou.pw:9000',
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
 
 
 def to_lower_camel(string: str) -> str:
@@ -98,6 +111,7 @@ def get_aircrafts():
         'expectRunway': conn.aircraft.expect_runway_end.name if conn.aircraft.expect_runway_end else None,
         'isInterceptIls': conn.aircraft.is_intercept_ils,
         'isOnGround': conn.aircraft.is_on_ground,
+        'isMissedApproach': conn.aircraft.legs[0].is_missed if len(conn.aircraft.legs) else None,
         'status': conn.aircraft.status
     } for conn in connections if conn.aircraft is not None]
 

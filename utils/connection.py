@@ -57,11 +57,3 @@ class Connection(asyncio.Protocol):
 
     def data_received(self, data):
         self._on_message(self, data.decode().rstrip())
-
-    def find_leg_by_ident(self, legs: list[Leg], ident: str):
-        for l in legs:
-            if l.fix is None:
-                continue
-            if l.fix.ident == ident:
-                return l
-        return None

@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Literal
+import struct
 
 from geopy.distance import Distance
 from sqlalchemy import or_, and_
@@ -20,11 +21,12 @@ from db.models import (
     TransitionLeg,
     Parking,
     TaxiPath,
-    Start
+    Start,
+    MagDecl,
+    Ils
 )
 from utils.leg import Leg
 from utils.physics import Acceleration, Speed
-from utils.geo import get_bearing_distance
 from messages.Position import Position
 
 
@@ -85,9 +87,6 @@ def fill_position_on_legs(procedure_legs: list[ProcedureLeg], airport_ident: str
     """
     legs: list[Leg] = []
     for pl in procedure_legs:
-        if pl.fix_lonx is None or pl.fix_laty is None:
-            continue
-
         if pl.fix_type == 'R':  # runway
             runway_end_name = pl.fix_ident[2:] if pl.fix_ident.startswith(
                 'RW') else pl.fix_ident
@@ -100,10 +99,9 @@ def fill_position_on_legs(procedure_legs: list[ProcedureLeg], airport_ident: str
             legs.append(Leg.from_procedure_leg(pl))
         else:
             fix = get_fix_by_ident(pl.fix_ident, pl.fix_region)
-            if fix is None:
-                continue
-            pl.fix_lonx = fix.lonx
-            pl.fix_laty = fix.laty
+            if fix is not None:
+                pl.fix_lonx = fix.lonx
+                pl.fix_laty = fix.laty
             leg = Leg.from_procedure_leg(pl)
             leg.fix = fix
             legs.append(leg)
@@ -514,3 +512,25 @@ def get_runway_by_runway_end_id(runway_end_id: int) -> Runway | None:
 
 def get_taxi_path_endpoint_by_airport_id(airport_id: int):
     return msfs_session.query(TaxiPath).filter(TaxiPath.airport_id == airport_id).all()
+
+
+mag_var_table = None
+
+
+def get_mag_var_table():
+    global mag_var_table
+    if mag_var_table is not None:
+        return mag_var_table
+
+    mag_decl = session.query(MagDecl).first()
+    if mag_decl is None:
+        return None
+
+    num_values_bytes = mag_decl.mag_var[:4]
+    num_values = struct.unpack('>I', num_values_bytes)[0]
+    return struct.unpack('>' + 'f' * num_values, mag_decl.mag_var[4:])
+
+
+def get_ils_by_ident_n_region(ident: str, region: str):
+    print(ident, region)
+    return session.query(Ils).filter(Ils.ident == ident, Ils.region == region).first()
