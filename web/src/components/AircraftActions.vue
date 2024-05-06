@@ -2,7 +2,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.NOT_DELIVERED) ? 'primary' : 'default'"
     :loading="areLoading[0]"
-    :disabled="aircraft.status !== AircraftStatus.NOT_DELIVERED"
+    v-if="aircraft.status === AircraftStatus.NOT_DELIVERED"
     @click="onClickClearanceDelivery"
   >
     Clearance Delivery
@@ -10,7 +10,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.DELIVERED) ? 'primary' : 'default'"
     :loading="areLoading[1]"
-    :disabled="aircraft.status !== AircraftStatus.DELIVERED"
+    v-if="aircraft.status === AircraftStatus.DELIVERED"
     @click="() => onClickPushbackApproved(aircraft)"
   >
     S/U & Pushback approved
@@ -18,7 +18,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.APPROVED_PUSHBACK_STARTUP) ? 'primary' : 'default'"
     :loading="areLoading[2]"
-    :disabled="aircraft.status !== AircraftStatus.APPROVED_PUSHBACK_STARTUP"
+    v-if="aircraft.status === AircraftStatus.APPROVED_PUSHBACK_STARTUP"
     @click="onClickTaxiTo"
   >
     Taxi via...
@@ -26,7 +26,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.APPROVED_TAXI_TO_RWY) ? 'primary' : 'default'"
     :loading="areLoading[3]"
-    :disabled="aircraft.status !== AircraftStatus.APPROVED_TAXI_TO_RWY"
+    v-if="aircraft.status === AircraftStatus.APPROVED_TAXI_TO_RWY"
     @click="() => onClickLineupAndWait(aircraft)"
   >
     Line-up and Wait
@@ -34,7 +34,7 @@
   <el-button
     :type="([AircraftStatus.APPROVED_TAXI_TO_RWY, AircraftStatus.LINEUP_WAIT].includes(aircraft.status)) ? 'primary' : 'default'"
     :loading="areLoading[4]"
-    :disabled="![AircraftStatus.APPROVED_TAXI_TO_RWY, AircraftStatus.LINEUP_WAIT].includes(aircraft.status)"
+    v-if="[AircraftStatus.APPROVED_TAXI_TO_RWY, AircraftStatus.LINEUP_WAIT].includes(aircraft.status)"
     @click="() => onClickClearedForTakeoff(aircraft)"
   >
     Cleared for Takeoff
@@ -42,7 +42,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF) ? 'primary' : 'default'"
     :loading="areLoading[5]"
-    :disabled="aircraft.status !== AircraftStatus.CLEARED_TAKEOFF"
+    v-if="aircraft.status === AircraftStatus.CLEARED_TAKEOFF"
     @click="onClickClimbDecendMaintain"
   >
     Climb/Decend and Maintain
@@ -50,7 +50,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF) ? 'primary' : 'default'"
     :loading="areLoading[6]"
-    :disabled="aircraft.status !== AircraftStatus.CLEARED_TAKEOFF"
+    v-if="aircraft.status === AircraftStatus.CLEARED_TAKEOFF"
     @click="() => onClickClearedToLand(aircraft)"
   >
     Cleared to Land
@@ -58,7 +58,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.CLEARED_TAKEOFF && aircraft.isInterceptIls) ? 'danger' : 'default'"
     :loading="areLoading[7]"
-    :disabled="aircraft.status !== AircraftStatus.CLEARED_TAKEOFF || !aircraft.isInterceptIls"
+    v-if="aircraft.status === AircraftStatus.CLEARED_TAKEOFF && aircraft.isInterceptIls"
     @click="() => onClickGoAround(aircraft)"
   >
     Go Around
@@ -66,7 +66,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.VACATE_RUNWAY) ? 'primary' : 'default'"
     :loading="areLoading[8]"
-    :disabled="aircraft.status !== AircraftStatus.VACATE_RUNWAY"
+    v-if="aircraft.status === AircraftStatus.VACATE_RUNWAY"
     @click="onClickTaxi2Bay"
   >
     Taxi to Bay
@@ -74,6 +74,7 @@
   <el-button
     :type="(aircraft.status === AircraftStatus.APPROVED_TAXI_TO_BAY) ? 'primary' : 'default'"
     :loading="areLoading[9]"
+    v-if="aircraft.status === AircraftStatus.APPROVED_TAXI_TO_BAY"
     @click="() => onClickShutdown(aircraft)"
   >
     Shutdown

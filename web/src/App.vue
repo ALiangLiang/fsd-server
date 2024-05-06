@@ -30,6 +30,16 @@
   </el-tabs>
 
   <el-table :data="filteredAircrafts" style="width: 100%">
+    <el-table-column :width="40">
+      <template #default="{ row: aircraft }: { row: Aircraft }">
+        <el-button
+          :icon="Close"
+          text
+          circle
+          @click="() => onClickShutdown(aircraft)"
+        />
+      </template>
+    </el-table-column>
     <el-table-column label="Callsign" prop="callsign" :width="80" />
     <el-table-column label="Parking" prop="parking.name" :width="80" />
     <el-table-column label="Squawk" prop="squawkCode" :width="80" />
@@ -71,6 +81,8 @@
 <script setup lang="ts">
 import { ref, provide, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElNotification } from 'element-plus'
+import { Close } from '@element-plus/icons-vue'
+
 
 import {
   serverKey,
@@ -168,6 +180,16 @@ async function updateAircraft () {
   return fetch(`${server.value}/aircrafts`)
     .then((response) => response.json())
     .then((json: Aircraft[]) => (aircrafts.value = json))
+}
+
+const onClickShutdown = async (aircraft: Aircraft) => {
+  await fetch(`${server.value}/aircrafts/${aircraft.id}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  await updateAircraft()
 }
 
 const onClickCreateOnbound = () => {
