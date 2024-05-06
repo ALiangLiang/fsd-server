@@ -3,6 +3,9 @@
     <el-row :gutter="4">
       <el-col :span="12">Server Link:<el-input v-model="server" autocomplete="off" /></el-col>
       <el-col :span="6">Airport ICAO:<el-input v-model="airportIdent" autocomplete="off" /></el-col>
+      <el-col :span="6">
+        <el-button @click="onClickOpenVhrBox">Open VHR Box</el-button>
+      </el-col>
     </el-row>
     <el-row :gutter="4">
       <el-col :span="12">
@@ -60,8 +63,16 @@
       </template>
     </el-table-column>
     <el-table-column align="right" :min-width="160">
-      <template #default="{ row: aircraft }">
-        <aircraft-actions :aircraft="aircraft" @update-aircraft="onUpdateAircraft" />
+      <template #default="{ row: aircraft }: { row: Aircraft }">
+        <el-button
+          type="warning"
+          plain
+          @mousedown="() => onMousedownAircraft(aircraft)"
+          @mouseup="() => onMouseupAircraft(aircraft)"
+        >
+          Tx
+        </el-button>
+        <aircraft-actions :aircraft="aircraft" @click-update="onUpdateAircraft" />
       </template>
     </el-table-column>
   </el-table>
@@ -82,7 +93,12 @@
 import { ref, provide, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElNotification } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
+import { Peer } from 'peerjs'
 
+import noiseSound from './assets/noise.mp3'
+import txSound from './assets/tx.wav'
+import rxSound from './assets/rx8.wav'
+import { getMicStream } from './utils'
 
 import {
   serverKey,
@@ -125,6 +141,11 @@ const aircrafts = ref<Aircraft[]>([])
 const presetFlightplans = ref([]) as extractInjectionKey<typeof presetFlightplansKey>
 const selectedAircraft = ref<Aircraft | null>(null)
 const activeStatus = ref(-1)
+const communicatedAircraft = ref<Aircraft | null>(null)
+const audioContext = new AudioContext()
+const micStream = ref<MediaStream | null>(null)
+const soundBuffer = ref<AudioBuffer | null>(null)
+const isTalking = ref(false)
 const Form = ref(CreateAircraftForm)
 
 const filteredAircrafts = computed(() =>
@@ -175,6 +196,9 @@ watch(aircrafts, (newAircrafts, oldAircrafts) => {
     }
   })
 })
+watch(isTalking, (isTalking) => {
+  micStream.value.getAudioTracks().map(t => t.kind == 'audio' && (t.enabled = isTalking))
+})
 
 async function updateAircraft () {
   return fetch(`${server.value}/aircrafts`)
@@ -204,6 +228,14 @@ const onClickCreateInbound = () => {
   isShowDialog.value = true
 }
 
+const onClickOpenVhrBox = () => {
+  window.open(
+    'vhr-box.html?airport=' + airportIdent.value,
+    'vhrboxwindow',
+    'popup=1,width=201,height=400'
+  )
+}
+
 const onUpdateAircraft = async (aircraftId: string) => {
   const aircrafts = await updateAircraft()
   if (activeStatus.value === -1) return
@@ -213,11 +245,93 @@ const onUpdateAircraft = async (aircraftId: string) => {
   activeStatus.value = aircraft.status
 }
 
+function playTxSound() {
+  const audio = new Audio(txSound)
+  audio.play()
+}
+
+const call = ref<MediaStream | null>(null)
+const onMousedownAircraft = async (aircraft: Aircraft) => {
+  communicatedAircraft.value = aircraft
+  
+  if (!soundBuffer.value) {
+    console.error('Sound effect not loaded yet.')
+    return
+  }
+
+  playTxSound()
+  isTalking.value = true
+}
+const onMouseupAircraft = async (aircraft: Aircraft) => {
+  communicatedAircraft.value = null
+  isTalking.value = false
+}
+
 onMounted(() => {
   server.value = localStorage.getItem('server') ?? document.location.origin
   airportIdent.value = localStorage.getItem('airportIdent') ?? ''
 
   return updateAircraft()
+})
+
+const peer = ref<Peer | null>(null)
+onMounted(async () => {
+  fetch(noiseSound)
+    .then(response => response.arrayBuffer())
+    .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+    .then(audioBuffer => {
+      soundBuffer.value = audioBuffer
+    })
+    .catch(error => console.error('Error loading sound effect:', error))
+
+  peer.value = new Peer({
+		host: 'dev.d.wlliou.pw',
+		port: 10000,
+		path: '/myapp',
+    secure: false,
+	})
+
+  const conn = peer.value.connect('fsd-training-server-rctp-twr')
+  conn.on('open', () => {
+    console.log('open')
+    conn.send('hi!')
+  })
+  conn.on('connection', () => {
+    console.log('open')
+    conn.send('hi!')
+  })
+  conn.on('disconnected', () => console.log('disconnected'))
+  conn.on('close', () => console.log('close'))
+  conn.on('error', (err) => console.error('error', err))
+
+  getMicStream()
+    .then((stream) => {
+      micStream.value = stream
+      
+      const audioContext = new AudioContext()
+      const source = audioContext.createBufferSource()
+      source.buffer = soundBuffer.value
+      source.connect(audioContext.destination)
+      source.start()
+
+      const mediaStream = audioContext.createMediaStreamDestination().stream
+      const audioTracks = mediaStream.getAudioTracks()
+      const audioTrack = audioTracks[0]
+      const mergedStream = new MediaStream([audioTrack, ...micStream.value.getAudioTracks()])
+      if (!call.value) {
+        call.value = peer.value.call('fsd-training-server-rctp-twr', mergedStream, {
+          metadata: {
+            // callsign: aircraft.callsign
+          }
+        })
+        call.value.on('stream', (remoteStream) => {
+          const audio = document.createElement('audio')
+          audio.srcObject = remoteStream
+          audio.play()
+        })
+        call.value.on('error', console.error)
+      }
+    })
 })
 
 onMounted(() => {
@@ -236,6 +350,7 @@ onMounted(() => {
 
   intervalId.value = setInterval(updateAircraft, 2000)
 })
+
 onUnmounted(() => {
   clearInterval(intervalId.value)
 })

@@ -21,7 +21,7 @@ from utils.connection import Connection
 app = FastAPI()
 
 origins = [
-    'http://dev.d.wlliou.pw:9000',
+    'https://dev.d.wlliou.pw:9000',
 ]
 
 app.add_middleware(

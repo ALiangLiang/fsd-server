@@ -10,10 +10,13 @@
   },
   "dependencies": {
     "element-plus": "^2.7.0",
+    "peerjs": "^1.5.2",
     "vue": "^3.4.21"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
+    "devcert": "^1.2.2",
+    "peer": "^1.0.2",
     "typescript": "^5.2.2",
     "unplugin-auto-import": "^0.17.5",
     "unplugin-vue-components": "^0.26.0",
