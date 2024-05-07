@@ -1,4 +1,6 @@
+import os
 import asyncio
+import argparse
 
 from uvicorn.server import Server, Config
 
@@ -10,12 +12,19 @@ HOST = '0.0.0.0'
 
 
 async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ssl-key', dest='key', default=None)
+    parser.add_argument('--ssl-cert', dest='cert', default=None)
+    args = parser.parse_args()
+
     fsd_server = training_server
     api_server_config = Config(
         app,
         host=HOST,
-        log_level="info",
-        reload=True
+        log_level='info',
+        reload=True,
+        ssl_keyfile=args.key,
+        ssl_certfile=args.cert,
     )
     api_server = Server(config=api_server_config)
     api_server_config.setup_event_loop()
