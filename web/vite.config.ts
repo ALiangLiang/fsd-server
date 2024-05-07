@@ -7,7 +7,7 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { certificateFor } from 'devcert'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(async ({ command }) => ({
   base: '/console',
   plugins: [
     vue(),
@@ -27,15 +27,15 @@ export default defineConfig({
     },
   },
   server: {
-    https: {
+    https: (command !== 'build') ? {
       ...(await certificateFor('dev.d.wlliou.pw')),
       maxSessionMemory: 100,
       host: '0.0.0.0'
-    },
+    } : null,
     host: true,
     port: 9000
   }
-})
+}))
 
 function entryPoints(...paths) {
   const entries = paths.map(parse).map(entry => {
