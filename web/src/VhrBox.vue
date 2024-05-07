@@ -106,7 +106,7 @@ const callsign = ref(
 const connections = ref<Map<string, (DataConnection | MediaConnection)>>(new Map())
 
 watch([isTalking, isMuted], ([isTalking, isMuted]) => {
-  micStream.value.getAudioTracks()
+  micStream.value?.getAudioTracks()
     .forEach(t => t.kind == 'audio' && (t.enabled = isTalking && !isMuted))
 })
 
@@ -120,40 +120,34 @@ function startToTalk(e: KeyboardEvent) {
     if (!micStream.value) return
 
     isTalking.value = true
-    Object.values(connections.value)
-      .forEach((connections) => {
-        connections.forEach((conn) => {
-          if (conn.type === 'media') {
-            conn.answer(micStream.value)
-          } else if (conn.type === 'data') {
-            conn.send({
-              type: 'TX',
-              payload: {
-                callsign: callsign.value
-              }
-            } as TxMessage)
+    connections.value.forEach((conn) => {
+      if (conn.type === 'media' && micStream.value) {
+        (conn as MediaConnection).answer(micStream.value)
+      } else if (conn.type === 'data') {
+        (conn as DataConnection).send({
+          type: 'TX',
+          payload: {
+            callsign: callsign.value
           }
-        })
-      })
+        } as TxMessage)
+      }
+    })
   }
 }
 function stopToTalk(e: KeyboardEvent) {
   if (e.key === 'Pause') {
     isTalking.value = false
     playTxSound()
-    Object.values(connections.value)
-      .forEach((connections) => {
-        connections.forEach((conn) => {
-          if (conn.type === 'data') {
-            conn.send({
-              type: 'TX_END',
-              payload: {
-                callsign: callsign.value
-              }
-            } as TxEndMessage)
+    connections.value.forEach((conn) => {
+      if (conn.type === 'data') {
+        (conn as DataConnection).send({
+          type: 'TX_END',
+          payload: {
+            callsign: callsign.value
           }
-        })
-      })
+        } as TxEndMessage)
+      }
+    })
   }
 }
 onMounted(async () => {
@@ -187,8 +181,8 @@ function createPeer (micStream: MediaStream) {
   peer.value.on('connection', (conn) => {
     connections.value.set(conn.peer, conn)
 
-    conn.on('data', (data: Message) => {
-      console.log(data)
+    conn.on('data', (rData) => {
+        const data = rData as Message
       if (data.type === 'TX') {
         talker.value = (data as TxMessage).payload.callsign
       } else if (data.type === 'TX_END') {
@@ -222,7 +216,7 @@ function createPeer (micStream: MediaStream) {
     })
 
     call.on('error', console.error)
-  }, console.error)
+  })
   peer.value.on('disconnected', () => console.log('disconnected'))
   peer.value.on('close', () => console.log('close'))
   peer.value.on('error', (err) => console.error('error', err))

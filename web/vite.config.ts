@@ -22,7 +22,7 @@ export default defineConfig({
     rollupOptions: {
       input: entryPoints(
         'index.html',
-        'vhf-box.html',
+        'vhr-box.html',
       ),
     },
   },

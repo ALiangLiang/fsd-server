@@ -114,7 +114,7 @@ import {
 import CreateAircraftForm from './components/CreateAircraftForm.vue'
 import CreateArrivalAircraftForm from './components/CreateArrivalAircraftForm.vue'
 import { AircraftStatus, type Aircraft, type Approach } from './types'
-import type { Message, TxMessage } from './message'
+import type { Message, TxMessage, TxEndMessage } from './message'
 
 const AircraftStatusMap = {
   [AircraftStatus.NOT_DELIVERED]: 'Not Delivered',
@@ -129,7 +129,7 @@ const AircraftStatusMap = {
   [AircraftStatus.APPROVED_TAXI_TO_BAY]: 'Approved Taxi to Bay',
 }
 
-const intervalId = ref(-1)
+const intervalId = ref<ReturnType<typeof setTimeout> | null>(null)
 const isShowDialog = ref(false)
 const createWIntervalId = ref(-1)
 const callsignFilter = ref('')
@@ -203,12 +203,12 @@ watch(aircrafts, (newAircrafts, oldAircrafts) => {
   })
 })
 watch(isTalking, (isTalking) => {
-  micStream.value.getAudioTracks()
+  micStream.value?.getAudioTracks()
     .forEach((t) => (t.kind == 'audio') && (t.enabled = isTalking))
   if (isTalking) {
-    noiseAudio.value.play()
+    noiseAudio.value?.play()
   } else {
-    noiseAudio.value.pause()
+    noiseAudio.value?.pause()
   }
 })
 
@@ -309,8 +309,8 @@ onMounted(async () => {
         },
      })
     conn.value.on('open', () => {
-      conn.value.on('data', (data: Message) => {
-        console.log(data)
+      conn.value?.on('data', (rData) => {
+        const data = rData as Message
         if (data.type === 'ACK') {
           isStarted.value = true
         } else if (data.type === 'TX_END') {
@@ -330,6 +330,7 @@ onMounted(async () => {
         .forEach((t) => (t.kind == 'audio') && (t.enabled = false))
 
       noiseAudio.value = new Audio(noiseSound)
+      // @ts-expect-error
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       const gainNode = ctx.createGain()
       gainNode.gain.value = 0.1
@@ -378,6 +379,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (intervalId.value === null) return
   clearInterval(intervalId.value)
 })
 </script>

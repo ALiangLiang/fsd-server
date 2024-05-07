@@ -109,7 +109,7 @@ const onClickSubmit = async (approachId?: number | null) => {
 const onClickCreateWithInterval = () => {
   clearInterval(createWIntervalId.value)
   onClickSubmit(form.approachId)
-  createWIntervalId.value = setInterval(() => onClickSubmit(form.approachId), form.seconds * 1000)
+  createWIntervalId.value = setInterval(() => onClickSubmit(form.approachId), form.seconds * 1000) as unknown as number
 }
 const onClickStopCreateWithInterval = () => {
   clearInterval(createWIntervalId.value)
