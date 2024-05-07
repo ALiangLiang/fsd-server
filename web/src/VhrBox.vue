@@ -169,8 +169,8 @@ onUnmounted(() => {
 
 function createPeer (micStream: MediaStream) {
   peer.value = new Peer('fsd-training-server-' + callsign.value.toLowerCase(), {
-    host: 'dev.d.wlliou.pw',
-    port: 10000,
+    host: 'fsd.wlliou.pw',
+    port: 2087,
     path: '/',
     key: 'peerjs',
     secure: true,
