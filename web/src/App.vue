@@ -17,6 +17,7 @@
         <el-button @click="onClickCreateInbound">Create Arrival Aircraft</el-button>
       </el-col>
     </el-row>
+    {{ (isStarted) ? 'connected to tower' : 'not connect' }}
   </el-space>
 
   <el-tabs
@@ -93,7 +94,7 @@
 import { ref, provide, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElNotification } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
-import { Peer } from 'peerjs'
+import { Peer, type MediaConnection } from 'peerjs'
 
 import noiseSound from './assets/noise.mp3'
 import txSound from './assets/tx.wav'
@@ -143,7 +144,9 @@ const selectedAircraft = ref<Aircraft | null>(null)
 const activeStatus = ref(-1)
 const communicatedAircraft = ref<Aircraft | null>(null)
 const audioContext = new AudioContext()
+const isStarted = ref(false)
 const micStream = ref<MediaStream | null>(null)
+const noiseAudio = ref<HTMLAudioElement | null>(null)
 const soundBuffer = ref<AudioBuffer | null>(null)
 const isTalking = ref(false)
 const Form = ref(CreateAircraftForm)
@@ -197,7 +200,14 @@ watch(aircrafts, (newAircrafts, oldAircrafts) => {
   })
 })
 watch(isTalking, (isTalking) => {
-  micStream.value.getAudioTracks().map(t => t.kind == 'audio' && (t.enabled = isTalking))
+  console.log('isTalking', isTalking)
+  micStream.value.getAudioTracks()
+    .forEach((t) => (t.kind == 'audio') && (t.enabled = isTalking))
+  if (isTalking) {
+    noiseAudio.value.play()
+  } else {
+    noiseAudio.value.pause()
+  }
 })
 
 async function updateAircraft () {
@@ -250,7 +260,7 @@ function playTxSound() {
   audio.play()
 }
 
-const call = ref<MediaStream | null>(null)
+const call = ref<MediaConnection | null>(null)
 const onMousedownAircraft = async (aircraft: Aircraft) => {
   communicatedAircraft.value = aircraft
   
@@ -259,12 +269,12 @@ const onMousedownAircraft = async (aircraft: Aircraft) => {
     return
   }
 
-  playTxSound()
   isTalking.value = true
 }
 const onMouseupAircraft = async (aircraft: Aircraft) => {
   communicatedAircraft.value = null
   isTalking.value = false
+  playTxSound()
 }
 
 onMounted(() => {
@@ -290,36 +300,45 @@ onMounted(async () => {
 		path: '/myapp',
     secure: false,
 	})
+  peer.value.on('open', function(id) {
+    isStarted.value = true
+  })
 
-  const conn = peer.value.connect('fsd-training-server-rctp-twr')
+  const conn = peer.value.connect(`fsd-training-server-${airportIdent.value.toLowerCase()}-twr`)
   conn.on('open', () => {
     console.log('open')
     conn.send('hi!')
   })
-  conn.on('connection', () => {
+  conn.on('data', () => {
     console.log('open')
     conn.send('hi!')
   })
-  conn.on('disconnected', () => console.log('disconnected'))
   conn.on('close', () => console.log('close'))
   conn.on('error', (err) => console.error('error', err))
 
   getMicStream()
     .then((stream) => {
       micStream.value = stream
-      
-      const audioContext = new AudioContext()
-      const source = audioContext.createBufferSource()
-      source.buffer = soundBuffer.value
-      source.connect(audioContext.destination)
-      source.start()
+      micStream.value.getAudioTracks()
+        .forEach((t) => (t.kind == 'audio') && (t.enabled = false))
 
-      const mediaStream = audioContext.createMediaStreamDestination().stream
-      const audioTracks = mediaStream.getAudioTracks()
-      const audioTrack = audioTracks[0]
-      const mergedStream = new MediaStream([audioTrack, ...micStream.value.getAudioTracks()])
-      if (!call.value) {
-        call.value = peer.value.call('fsd-training-server-rctp-twr', mergedStream, {
+      noiseAudio.value = new Audio(noiseSound)
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const gainNode = ctx.createGain()
+      gainNode.gain.value = 0.1
+      const stream_dest = ctx.createMediaStreamDestination()
+      const source = ctx.createMediaElementSource(noiseAudio.value)
+      source.connect(gainNode)
+      gainNode.connect(stream_dest)
+      const audioTrack = stream_dest.stream
+      console.log(audioTrack.getAudioTracks())
+
+      // const mediaStream = audioContext.createMediaStreamDestination().stream
+      // const audioTracks = mediaStream.getAudioTracks()
+      // const audioTrack = audioTracks[0]
+      const mergedStream = new MediaStream([...audioTrack.getAudioTracks(), ...micStream.value.getAudioTracks()])
+      if (!call.value && peer.value) {
+        call.value = peer.value.call(`fsd-training-server-${airportIdent.value.toLowerCase()}-twr`, mergedStream, {
           metadata: {
             // callsign: aircraft.callsign
           }
