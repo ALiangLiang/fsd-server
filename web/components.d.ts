@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AircraftActions: typeof import('./src/components/AircraftActions.vue')['default']
+    Antenna: typeof import('./src/components/icons/Antenna.vue')['default']
     ChangeAltitudeForm: typeof import('./src/components/ChangeAltitudeForm.vue')['default']
     ClearanceDeliveryForm: typeof import('./src/components/ClearanceDeliveryForm.vue')['default']
     CreateAircraftForm: typeof import('./src/components/CreateAircraftForm.vue')['default']
@@ -29,7 +30,9 @@ declare module 'vue' {
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
+    Search: typeof import('./src/components/icons/Search.vue')['default']
     Taxi2BayForm: typeof import('./src/components/Taxi2BayForm.vue')['default']
     TaxiToForm: typeof import('./src/components/TaxiToForm.vue')['default']
+    Wifi: typeof import('./src/components/icons/Wifi.vue')['default']
   }
 }

@@ -68,6 +68,7 @@
         <el-button
           type="warning"
           plain
+          :disabled="!isStarted"
           @mousedown="() => onMousedownAircraft(aircraft)"
           @mouseup="() => onMouseupAircraft(aircraft)"
         >
@@ -94,12 +95,10 @@
 import { ref, provide, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElNotification } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
-import { Peer, type MediaConnection } from 'peerjs'
+import { Peer, type MediaConnection, type DataConnection } from 'peerjs'
 
 import noiseSound from './assets/noise.mp3'
-import txSound from './assets/tx.wav'
-import rxSound from './assets/rx8.wav'
-import { getMicStream } from './utils'
+import { getMicStream, playTxSound, playRxSound } from './utils'
 
 import {
   serverKey,
@@ -115,6 +114,7 @@ import {
 import CreateAircraftForm from './components/CreateAircraftForm.vue'
 import CreateArrivalAircraftForm from './components/CreateArrivalAircraftForm.vue'
 import { AircraftStatus, type Aircraft, type Approach } from './types'
+import type { Message, TxMessage } from './message'
 
 const AircraftStatusMap = {
   [AircraftStatus.NOT_DELIVERED]: 'Not Delivered',
@@ -142,6 +142,9 @@ const aircrafts = ref<Aircraft[]>([])
 const presetFlightplans = ref([]) as extractInjectionKey<typeof presetFlightplansKey>
 const selectedAircraft = ref<Aircraft | null>(null)
 const activeStatus = ref(-1)
+const Form = ref(CreateAircraftForm)
+
+const peer = ref<Peer | null>(null)
 const communicatedAircraft = ref<Aircraft | null>(null)
 const audioContext = new AudioContext()
 const isStarted = ref(false)
@@ -149,7 +152,7 @@ const micStream = ref<MediaStream | null>(null)
 const noiseAudio = ref<HTMLAudioElement | null>(null)
 const soundBuffer = ref<AudioBuffer | null>(null)
 const isTalking = ref(false)
-const Form = ref(CreateAircraftForm)
+const conn = ref<DataConnection | null>(null)
 
 const filteredAircrafts = computed(() =>
   aircrafts.value.filter((aircraft) => {
@@ -200,7 +203,6 @@ watch(aircrafts, (newAircrafts, oldAircrafts) => {
   })
 })
 watch(isTalking, (isTalking) => {
-  console.log('isTalking', isTalking)
   micStream.value.getAudioTracks()
     .forEach((t) => (t.kind == 'audio') && (t.enabled = isTalking))
   if (isTalking) {
@@ -240,7 +242,7 @@ const onClickCreateInbound = () => {
 
 const onClickOpenVhrBox = () => {
   window.open(
-    'vhr-box.html?airport=' + airportIdent.value,
+    'vhr-box.html?callsign=' + airportIdent.value + '_TWR',
     'vhrboxwindow',
     'popup=1,width=201,height=400'
   )
@@ -255,11 +257,6 @@ const onUpdateAircraft = async (aircraftId: string) => {
   activeStatus.value = aircraft.status
 }
 
-function playTxSound() {
-  const audio = new Audio(txSound)
-  audio.play()
-}
-
 const call = ref<MediaConnection | null>(null)
 const onMousedownAircraft = async (aircraft: Aircraft) => {
   communicatedAircraft.value = aircraft
@@ -268,6 +265,7 @@ const onMousedownAircraft = async (aircraft: Aircraft) => {
     console.error('Sound effect not loaded yet.')
     return
   }
+  conn.value?.send({ type: 'TX', payload: { callsign: aircraft.callsign } } as TxMessage)
 
   isTalking.value = true
 }
@@ -275,6 +273,7 @@ const onMouseupAircraft = async (aircraft: Aircraft) => {
   communicatedAircraft.value = null
   isTalking.value = false
   playTxSound()
+  conn.value?.send({ type: 'TX_END', payload: { callsign: aircraft.callsign } } as TxEndMessage)
 }
 
 onMounted(() => {
@@ -284,7 +283,6 @@ onMounted(() => {
   return updateAircraft()
 })
 
-const peer = ref<Peer | null>(null)
 onMounted(async () => {
   fetch(noiseSound)
     .then(response => response.arrayBuffer())
@@ -295,26 +293,35 @@ onMounted(async () => {
     .catch(error => console.error('Error loading sound effect:', error))
 
   peer.value = new Peer({
-		host: 'dev.d.wlliou.pw',
-		port: 10000,
-		path: '/myapp',
-    secure: false,
-	})
-  peer.value.on('open', function(id) {
-    isStarted.value = true
+    host: 'dev.d.wlliou.pw',
+    port: 10000,
+    path: '/',
+    key: 'peerjs',
+    secure: true,
+  })
+  peer.value.on('open', function() {
+    if (!peer.value) return
+
+    conn.value = peer.value.connect(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`, {
+       reliable: false,
+       metadata: {
+          callsign: 'OBS'
+        },
+     })
+    conn.value.on('open', () => {
+      conn.value.on('data', (data: Message) => {
+        console.log(data)
+        if (data.type === 'ACK') {
+          isStarted.value = true
+        } else if (data.type === 'TX_END') {
+          playRxSound()
+        }
+      })
+    })
+    conn.value.on('close', () => console.log('close'))
+    conn.value.on('error', (err) => console.error('error', err))
   })
 
-  const conn = peer.value.connect(`fsd-training-server-${airportIdent.value.toLowerCase()}-twr`)
-  conn.on('open', () => {
-    console.log('open')
-    conn.send('hi!')
-  })
-  conn.on('data', () => {
-    console.log('open')
-    conn.send('hi!')
-  })
-  conn.on('close', () => console.log('close'))
-  conn.on('error', (err) => console.error('error', err))
 
   getMicStream()
     .then((stream) => {
@@ -326,22 +333,22 @@ onMounted(async () => {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       const gainNode = ctx.createGain()
       gainNode.gain.value = 0.1
-      const stream_dest = ctx.createMediaStreamDestination()
+      const streamDest = ctx.createMediaStreamDestination()
       const source = ctx.createMediaElementSource(noiseAudio.value)
       source.connect(gainNode)
-      gainNode.connect(stream_dest)
-      const audioTrack = stream_dest.stream
-      console.log(audioTrack.getAudioTracks())
+      gainNode.connect(streamDest)
+      const audioTrack = streamDest.stream
 
       // const mediaStream = audioContext.createMediaStreamDestination().stream
       // const audioTracks = mediaStream.getAudioTracks()
       // const audioTrack = audioTracks[0]
       const mergedStream = new MediaStream([...audioTrack.getAudioTracks(), ...micStream.value.getAudioTracks()])
       if (!call.value && peer.value) {
-        call.value = peer.value.call(`fsd-training-server-${airportIdent.value.toLowerCase()}-twr`, mergedStream, {
+        console.log(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`)
+        call.value = peer.value.call(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`, mergedStream, {
           metadata: {
-            // callsign: aircraft.callsign
-          }
+            callsign: 'OBS'
+          },
         })
         call.value.on('stream', (remoteStream) => {
           const audio = document.createElement('audio')

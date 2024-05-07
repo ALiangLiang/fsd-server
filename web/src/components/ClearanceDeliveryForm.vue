@@ -29,6 +29,7 @@
         :step="1000"
       />
     </el-form-item>
+    <!-- {{ 'RCTP' }} tower, {{ 'TTW948' }}, good evening, request clearance to {{ 'RJTT' }}. FL{{ '350' }}, information {{ 'A' }} -->
     <el-form-item>
       <el-button type="primary" :loading="isLoading" @click="onClickSubmit">Submit</el-button>
     </el-form-item>
