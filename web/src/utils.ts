@@ -10,7 +10,7 @@ import rx6Sound from './assets/rx6.wav'
 import rx7Sound from './assets/rx7.wav'
 import rx8Sound from './assets/rx8.wav'
 
-export async function getMicStream(): Promise<MediaStream> {
+export async function getMicStream(): Promise<[MediaStream, MediaDeviceInfo | undefined]> {
   const getUserMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia)
   const devices = await navigator.mediaDevices.enumerateDevices()
   const device = devices.find((device) => device.kind === 'audioinput' && device.deviceId === 'default')
@@ -24,7 +24,7 @@ export async function getMicStream(): Promise<MediaStream> {
           noiseSuppression: { exact: true },
         }
       },
-      resolve,
+      (stream) => resolve([stream, device]),
       reject,
     )
   })

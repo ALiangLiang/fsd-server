@@ -16,13 +16,19 @@ export interface AckMessage {
   type: 'ACK'
 }
 
+export interface MemberListMessage {
+  type: 'MEMBER_LIST',
+  payload: {
+    members: string[]
+  }
+}
+
 export interface AddMessage {
   type: 'ADD',
   payload: {
     callsign: string
   }
 }
-
 export interface KillMessage {
   type: 'KILL',
   payload: {
@@ -30,4 +36,4 @@ export interface KillMessage {
   }
 }
 
-export type Message = AckMessage | TxMessage | TxEndMessage | AddMessage | KillMessage
+export type Message = AckMessage | TxMessage | TxEndMessage | AddMessage | KillMessage | MemberListMessage

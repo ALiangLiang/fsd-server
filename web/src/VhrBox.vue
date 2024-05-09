@@ -7,8 +7,11 @@
       <el-col :span="2">
         <el-icon><CaretBottom /></el-icon>
       </el-col>
-      <el-col :span="12">
+      <el-col :span="20">
         VHF
+      </el-col>
+      <el-col :span="2">
+        <el-icon style="cursor: pointer" @click="onClickSetting"><Setting /></el-icon>
       </el-col>
     </el-row>
     <el-row :gutter="2" justify="space-between" align="middle" style="height: 25px">
@@ -26,7 +29,14 @@
         </span>
       </el-col>
       <el-col :span="2">
-        <span :class="isTalking || 'disabled-text'">TX</span>
+        <span
+          :class="isTalking || 'disabled-text'"
+          style="cursor: pointer"
+          @mousedown="() => startToTalk()"
+          @mouseup="() => stopToTalk()"
+        >
+          TX
+        </span>
       </el-col>
       <el-col :span="2">
         <el-icon style="cursor: pointer" @click="onClickReconnect"><Wifi /></el-icon>
@@ -57,11 +67,43 @@
       {{
         (listMode === 'channel') &&
           `Channels (${ connections.size + 1 })` ||
-          `Users (${ connections.size })`
+        (listMode === 'user') &&
+          `Users (${ connections.size })` ||
+          'Settings'
       }}
     </div>
     <div v-if="listMode !== null">
-      <div class="list-container">
+      <div v-if="listMode === 'setting'" class="list-container">
+        <el-row class="row" justice="space-between">
+          <el-col :span="12">
+            Always talk
+          </el-col>
+          <el-col
+            :span="12"
+            @click="isAlwaysTalk = !isAlwaysTalk"
+          >
+            <!-- {{ (isAlwaysTalk) ? 'Yes' : 'No' }} -->
+            {{ 'No' }}
+          </el-col>
+        </el-row>
+        <el-row class="row" justice="space-between">
+          <el-col :span="12">
+            PTT key
+          </el-col>
+          <el-col :span="12" style="cursor: pointer" @click="onClickChangePttKey">
+            {{ (isChangingPttKey) ? '' : pttKey }}
+          </el-col>
+        </el-row>
+        <el-row class="row" justice="space-between">
+          <el-col :span="12">
+            Input Device
+          </el-col>
+          <el-col :span="12">
+            {{ inputDeviceName }}
+          </el-col>
+        </el-row>
+      </div>
+      <div v-else class="list-container">
         <el-row v-if="listMode === 'channel'" class="row" justice="space-between">
           <span style="color: red">Unicom</span>
         </el-row>
@@ -83,20 +125,26 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { CaretBottom, Headset, Microphone } from '@element-plus/icons-vue'
+import { CaretBottom, Headset, Microphone, Setting } from '@element-plus/icons-vue'
 import { Peer, type DataConnection, type MediaConnection } from 'peerjs'
 
 import { getMicStream, playTxSound, playRxSound } from './utils'
 import Wifi from './components/icons/Wifi.vue'
 import Search from './components/icons/Search.vue'
 import Antenna from './components/icons/Antenna.vue'
-import type { Message, TxMessage, TxEndMessage } from './message'
+import type {
+  Message, 
+  TxMessage,
+  TxEndMessage, 
+  AckMessage,
+  MemberListMessage 
+} from './message'
 
 const peer = ref<Peer | null>(null)
 const isStarted = ref(false)
 const isTalking = ref(false)
 const isMuted = ref(false)
-const listMode = ref<'channel' | 'user' | null>('user')
+const listMode = ref<'channel' | 'user' | 'setting' | null>('user')
 const micStream = ref<MediaStream | null>(null)
 const urlParams = new URLSearchParams(window.location.search)
 const talker = ref<string | null>(null)
@@ -104,71 +152,119 @@ const callsign = ref(
   urlParams.get('callsign') ?? ('TRAINEE-' + (Math.random() + 1).toString(36).substring(8).toUpperCase())
 )
 const connections = ref<Map<string, (DataConnection | MediaConnection)>>(new Map())
+const isAlwaysTalk = ref(false)
+const isChangingPttKey = ref(false)
+const pttKey = ref(localStorage.getItem('pttKey') ?? 'Pause')
+const inputDeviceName = ref('Unknown')
 
 watch([isTalking, isMuted], ([isTalking, isMuted]) => {
   micStream.value?.getAudioTracks()
     .forEach(t => t.kind == 'audio' && (t.enabled = isTalking && !isMuted))
 })
+watch(pttKey, (pttKey) => localStorage.setItem('pttKey', pttKey))
 
 const onClickReconnect = () => {
   peer.value?.disconnect()
   peer.value?.reconnect()
 }
 
-function startToTalk(e: KeyboardEvent) {
-  if (e.key === 'Pause' && !isTalking.value) {
-    if (!micStream.value) return
+const onClickSetting = () => {
+  listMode.value = (listMode.value === 'setting') ? null : 'setting'
+}
 
-    isTalking.value = true
-    connections.value.forEach((conn) => {
-      if (conn.type === 'media' && micStream.value) {
-        (conn as MediaConnection).answer(micStream.value)
-      } else if (conn.type === 'data') {
-        (conn as DataConnection).send({
-          type: 'TX',
-          payload: {
-            callsign: callsign.value
-          }
-        } as TxMessage)
-      }
-    })
+const onClickChangePttKey = () => {
+  isChangingPttKey.value = true
+  console.log(isChangingPttKey.value)
+  function onkeydown (e) {
+    if (e.key !== 'Escape') {
+      pttKey.value = e.key
+    }
+    isChangingPttKey.value = false
+    document.removeEventListener('keydown', onkeydown)
+  }
+  document.addEventListener('keydown', onkeydown)
+}
+
+function startToTalk () {
+  if (!micStream.value) return
+
+  isTalking.value = true
+  broadcastMessage({
+    type: 'TX',
+    payload: {
+      callsign: callsign.value
+    }
+  } as TxMessage)
+  connections.value.forEach((conn) => {
+    if (conn.type === 'media' && micStream.value) {
+      (conn as MediaConnection).answer(micStream.value)
+    }
+  })
+}
+function stopToTalk () {
+  isTalking.value = false
+  playTxSound()
+  broadcastMessage({
+    type: 'TX_END',
+    payload: {
+      callsign: callsign.value
+    }
+  } as TxEndMessage)
+}
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === pttKey.value && !isTalking.value) {
+    startToTalk()
   }
 }
-function stopToTalk(e: KeyboardEvent) {
-  if (e.key === 'Pause') {
-    isTalking.value = false
-    playTxSound()
-    connections.value.forEach((conn) => {
-      if (conn.type === 'data') {
-        (conn as DataConnection).send({
-          type: 'TX_END',
-          payload: {
-            callsign: callsign.value
-          }
-        } as TxEndMessage)
-      }
-    })
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === pttKey.value) {
+    stopToTalk()
   }
 }
+function onMousedown(e: KeyboardEvent) {
+  if (e.which === 2 && !isTalking.value) {
+    startToTalk()
+  }
+}
+function onMouseup(e: KeyboardEvent) {
+  if (e.which === 2) {
+    stopToTalk()
+  }
+}
+function broadcastMessage(message: Message) {
+  connections.value.forEach((conn) => {
+    if (conn.type === 'data') {
+      console.log(conn.peer, message);
+      (conn as DataConnection).send(message)
+    }
+  })
+}
+
 onMounted(async () => {
   getMicStream()
-    .then((stream) => {
+    .then(([stream, device]) => {
       micStream.value = stream
       micStream.value.getAudioTracks()
         .forEach((t) => t.kind == 'audio' && (t.enabled = false))
+      inputDeviceName.value = device.label
 
       createPeer(stream)
     })
-  document.addEventListener('keydown', startToTalk)
-  document.addEventListener('keyup', stopToTalk)
+  document.addEventListener('keydown', onKeydown)
+  document.addEventListener('keyup', onKeyUp)
+  document.addEventListener('mousedown', onMousedown)
+  document.addEventListener('mouseup', onMouseup)
 })
 onUnmounted(() => {
-  document.removeEventListener('keydown', startToTalk)
-  document.removeEventListener('keyup', stopToTalk)
+  document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('keyup', onKeyUp)
+  document.removeEventListener('mousedown', onMousedown)
+  document.removeEventListener('mouseup', onMouseup)
 })
 
 function createPeer (micStream: MediaStream) {
   peer.value = new Peer('fsd-training-server-' + callsign.value.toLowerCase(), {
+    // host: 'd.wlliou.pw',
     host: 'fsd.wlliou.pw',
     port: 2087,
     path: '/',
@@ -193,7 +289,15 @@ function createPeer (micStream: MediaStream) {
       }
     })
     conn.on('open', () => {
-      conn.send({ type: 'ACK' })
+      conn.send({ type: 'ACK' } as AckMessage)
+      conn.send({
+        type: 'MEMBER_LIST',
+        payload: {
+          members: Array.from(connections.value.values())
+            .filter((conn) => conn.type === 'media')
+            .map((conn) => conn.peer)
+        }
+      } as MemberListMessage)
     })
     conn.on('close', () => {
       connections.value.delete(conn.peer)
@@ -206,6 +310,7 @@ function createPeer (micStream: MediaStream) {
     call.answer(micStream)
     
     call.on('stream', (remoteStream) => {
+      console.log('stream', remoteStream)
       const audio = document.createElement('audio')
       audio.srcObject = remoteStream
       audio.play()

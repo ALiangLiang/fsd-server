@@ -97,7 +97,6 @@ import { ElNotification } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { Peer, type MediaConnection, type DataConnection } from 'peerjs'
 
-import noiseSound from './assets/noise.mp3'
 import { getMicStream, playTxSound, playRxSound } from './utils'
 
 import {
@@ -150,7 +149,6 @@ const audioContext = new AudioContext()
 const isStarted = ref(false)
 const micStream = ref<MediaStream | null>(null)
 const noiseAudio = ref<HTMLAudioElement | null>(null)
-const soundBuffer = ref<AudioBuffer | null>(null)
 const isTalking = ref(false)
 const conn = ref<DataConnection | null>(null)
 
@@ -261,10 +259,6 @@ const call = ref<MediaConnection | null>(null)
 const onMousedownAircraft = async (aircraft: Aircraft) => {
   communicatedAircraft.value = aircraft
   
-  if (!soundBuffer.value) {
-    console.error('Sound effect not loaded yet.')
-    return
-  }
   conn.value?.send({ type: 'TX', payload: { callsign: aircraft.callsign } } as TxMessage)
 
   isTalking.value = true
@@ -284,14 +278,6 @@ onMounted(() => {
 })
 
 onMounted(async () => {
-  fetch(noiseSound)
-    .then(response => response.arrayBuffer())
-    .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-    .then(audioBuffer => {
-      soundBuffer.value = audioBuffer
-    })
-    .catch(error => console.error('Error loading sound effect:', error))
-
   peer.value = new Peer({
     host: 'fsd.wlliou.pw',
     port: 2087,
@@ -301,13 +287,14 @@ onMounted(async () => {
   })
   peer.value.on('open', function() {
     if (!peer.value) return
+    console.log('My peer ID is: ' + peer.value.id)
 
     conn.value = peer.value.connect(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`, {
-       reliable: false,
-       metadata: {
-          callsign: 'OBS'
-        },
-     })
+      reliable: false,
+      metadata: {
+        callsign: 'OBS'
+      },
+    })
     conn.value.on('open', () => {
       conn.value?.on('data', (rData) => {
         const data = rData as Message
@@ -315,6 +302,8 @@ onMounted(async () => {
           isStarted.value = true
         } else if (data.type === 'TX_END') {
           playRxSound()
+        } else if (data.type === 'MEMBER_LIST') {
+          console.log('MEMBER_LIST', data)
         }
       })
     })
@@ -322,28 +311,13 @@ onMounted(async () => {
     conn.value.on('error', (err) => console.error('error', err))
   })
 
-
   getMicStream()
-    .then((stream) => {
+    .then(([stream]) => {
       micStream.value = stream
       micStream.value.getAudioTracks()
         .forEach((t) => (t.kind == 'audio') && (t.enabled = false))
 
-      noiseAudio.value = new Audio(noiseSound)
-      // @ts-expect-error
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const gainNode = ctx.createGain()
-      gainNode.gain.value = 0.1
-      const streamDest = ctx.createMediaStreamDestination()
-      const source = ctx.createMediaElementSource(noiseAudio.value)
-      source.connect(gainNode)
-      gainNode.connect(streamDest)
-      const audioTrack = streamDest.stream
-
-      // const mediaStream = audioContext.createMediaStreamDestination().stream
-      // const audioTracks = mediaStream.getAudioTracks()
-      // const audioTrack = audioTracks[0]
-      const mergedStream = new MediaStream([...audioTrack.getAudioTracks(), ...micStream.value.getAudioTracks()])
+      const mergedStream = new MediaStream([...micStream.value.getAudioTracks()])
       if (!call.value && peer.value) {
         console.log(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`)
         call.value = peer.value.call(`fsd-training-server-${airportIdent.value.toLowerCase()}_twr`, mergedStream, {
@@ -355,6 +329,9 @@ onMounted(async () => {
           const audio = document.createElement('audio')
           audio.srcObject = remoteStream
           audio.play()
+        })
+        call.value.on('close', () => {
+          console.log('close')
         })
         call.value.on('error', console.error)
       }
