@@ -112,6 +112,7 @@ import {
 } from './injection-keys'
 import CreateAircraftForm from './components/CreateAircraftForm.vue'
 import CreateArrivalAircraftForm from './components/CreateArrivalAircraftForm.vue'
+import { openWebsocket } from './aurora'
 import { AircraftStatus, type Aircraft, type Approach } from './types'
 import type { Message, TxMessage, TxEndMessage } from './message'
 
@@ -145,12 +146,14 @@ const Form = ref(CreateAircraftForm)
 
 const peer = ref<Peer | null>(null)
 const communicatedAircraft = ref<Aircraft | null>(null)
-const audioContext = new AudioContext()
 const isStarted = ref(false)
 const micStream = ref<MediaStream | null>(null)
 const noiseAudio = ref<HTMLAudioElement | null>(null)
 const isTalking = ref(false)
 const conn = ref<DataConnection | null>(null)
+const selectedTrafficOnAurora = ref<string | null>(null)
+const auroraIntervalId = ref<ReturnType<typeof setTimeout> | null>(null)
+const auroraConnectedCallsign = ref<string | null>(null)
 
 const filteredAircrafts = computed(() =>
   aircrafts.value.filter((aircraft) => {
@@ -207,6 +210,13 @@ watch(isTalking, (isTalking) => {
     noiseAudio.value?.play()
   } else {
     noiseAudio.value?.pause()
+  }
+})
+watch(selectedTrafficOnAurora, (selectedTrafficOnAurora) => {
+  if (selectedTrafficOnAurora === null) {
+    callsignFilter.value = ''
+  } else {
+    callsignFilter.value = selectedTrafficOnAurora
   }
 })
 
@@ -275,6 +285,35 @@ onMounted(() => {
   airportIdent.value = localStorage.getItem('airportIdent') ?? ''
 
   return updateAircraft()
+})
+
+onMounted(async () => {
+  openWebsocket()
+    .then(([socket, sendCommand]) => {
+      auroraIntervalId.value = setInterval(() => {
+        sendCommand('#SELTFC')
+      }, 1000)
+
+      socket.addEventListener('message', async function (event) {
+        const responseData = await event.data.text()
+        const [cmd, ...args] = responseData.split(';');
+        if (cmd === '#SELTFC') {
+          selectedTrafficOnAurora.value = (args[0] !== '') ? args[0] : null
+        } else if (cmd === '#CTRL') {
+          auroraConnectedCallsign.value = args[0]
+        }
+      })
+
+      sendCommand('#CONN')
+    })
+    .catch(() => {
+      console.log('Failed to connect Aurora')
+    })
+})
+
+onUnmounted(() => {
+  if (auroraIntervalId.value === null) return
+  clearInterval(auroraIntervalId.value)
 })
 
 onMounted(async () => {
