@@ -175,7 +175,7 @@ const onClickSetting = () => {
 const onClickChangePttKey = () => {
   isChangingPttKey.value = true
   console.log(isChangingPttKey.value)
-  function onkeydown (e) {
+  function onkeydown (e: KeyboardEvent) {
     if (e.key !== 'Escape') {
       pttKey.value = e.key
     }
@@ -221,13 +221,13 @@ function onKeyUp(e: KeyboardEvent) {
     stopToTalk()
   }
 }
-function onMousedown(e: KeyboardEvent) {
-  if (e.which === 2 && !isTalking.value) {
+function onMousedown(e: MouseEvent) {
+  if (e.button === 1 && !isTalking.value) {
     startToTalk()
   }
 }
-function onMouseup(e: KeyboardEvent) {
-  if (e.which === 2) {
+function onMouseup(e: MouseEvent) {
+  if (e.button === 1) {
     stopToTalk()
   }
 }
@@ -246,7 +246,9 @@ onMounted(async () => {
       micStream.value = stream
       micStream.value.getAudioTracks()
         .forEach((t) => t.kind == 'audio' && (t.enabled = false))
-      inputDeviceName.value = device.label
+      if (device) {
+        inputDeviceName.value = device.label
+      }
 
       createPeer(stream)
     })
